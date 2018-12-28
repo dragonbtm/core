@@ -77,7 +77,11 @@ function readJointDirectly(conn, unit, callbacks, bRetrying) {
 			objectHash.cleanNulls(objUnit);
 			var bVoided = (objUnit.content_hash && main_chain_index < min_retrievable_mci);
 			var bRetrievable = (main_chain_index >= min_retrievable_mci || main_chain_index === null);
-			
+
+			if(objUnit.unit == '2t9wTuwslOZhymAE3W4EfMrb+JP8rRulIhlXX2wqT64=') {
+				console.log(objUnit.unit)
+			}
+
 			if (!conf.bLight && !objUnit.last_ball && !isGenesisUnit(unit))
 				throw Error("no last ball in unit "+JSON.stringify(objUnit));
 			
@@ -488,6 +492,9 @@ function readJointDirectly(conn, unit, callbacks, bRetrying) {
 				//profiler.stop('read');
 				// verify unit hash. Might fail if the unit was archived while reading, in this case retry
 				// light wallets don't have last_ball, don't verify their hashes
+				if(objUnit.unit == '2t9wTuwslOZhymAE3W4EfMrb+JP8rRulIhlXX2wqT64=') {
+					console.log("=========================")
+				}
 				if (!conf.bLight && !isCorrectHash(objUnit, unit)){
 					if (bRetrying)
 						throw Error("unit hash verification failed, unit: "+unit+", objUnit: "+JSON.stringify(objUnit));
@@ -496,6 +503,7 @@ function readJointDirectly(conn, unit, callbacks, bRetrying) {
 						readJointDirectly(conn, unit, callbacks, true);
 					}, 60*1000);
 				}
+
 				if (!conf.bSaveJointJson || !bStable || (bFinalBad && bRetrievable) || bRetrievable)
 					return callbacks.ifFound(objJoint);
 				conn.query("INSERT "+db.getIgnore()+" INTO joints (unit, json) VALUES (?,?)", [unit, JSON.stringify(objJoint)], function(){

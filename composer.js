@@ -426,8 +426,9 @@ function composeJoint(params){
 			});
 		},
 		function(cb){ // input coins
-			objUnit.headers_commission = objectLength.getHeadersSize(objUnit);
-			var naked_payload_commission = objectLength.getTotalPayloadSize(objUnit); // without input coins
+				objUnit.headers_commission = conf.bLight ? objectLength.getHeadersSize(objUnit) : 0;
+
+			var naked_payload_commission = conf.bLight ? objectLength.getTotalPayloadSize(objUnit) : 0; // without input coins
 
 			if (bGenesis){
 				var issueInput = {type: "issue", serial_number: 1, amount: constants.TOTAL_WHITEBYTES};
@@ -444,12 +445,15 @@ function composeJoint(params){
 					throw Error('inputs but no input_amount');
 				total_input = params.input_amount;
 				objPaymentMessage.payload.inputs = params.inputs;
-				objUnit.payload_commission = objectLength.getTotalPayloadSize(objUnit);
+				objUnit.payload_commission = conf.bLight ? objectLength.getTotalPayloadSize(objUnit) : 0;
 				return cb();
 			}
 			
 			// all inputs must appear before last_ball
 			var target_amount = params.send_all ? Infinity : (total_amount + objUnit.headers_commission + naked_payload_commission);
+			if (!conf.bLight) {
+				target_amount = params.send_all ? Infinity : total_amount + 1;
+			}
 			inputs.pickDivisibleCoinsForAmount(
 				conn, null, arrPayingAddresses, last_ball_mci, target_amount, bMultiAuthored, params.spend_unconfirmed || 'own',
 				function(arrInputsWithProofs, _total_input){
@@ -460,7 +464,7 @@ function composeJoint(params){
 						});
 					total_input = _total_input;
 					objPaymentMessage.payload.inputs = arrInputsWithProofs.map(function(objInputWithProof){ return objInputWithProof.input; });
-					objUnit.payload_commission = objectLength.getTotalPayloadSize(objUnit);
+					objUnit.payload_commission = conf.bLight ? objectLength.getTotalPayloadSize(objUnit) : 0;
 					console.log("inputs increased payload by", objUnit.payload_commission - naked_payload_commission);
 					cb();
 				}
@@ -476,7 +480,7 @@ function composeJoint(params){
 			
 			// change, payload hash, signature, and unit hash
 			var change = total_input - total_amount - objUnit.headers_commission - objUnit.payload_commission;
-			if (change <= 0){
+			if (change < 0){
 				if (!params.send_all)
 					throw Error("change="+change+", params="+JSON.stringify(params));
 				return handleError({ 
@@ -495,6 +499,7 @@ function composeJoint(params){
 					async.each( // different keys sign in parallel (if multisig)
 						assocSigningPaths[address],
 						function(path, cb3){
+							console.log("=======================開始籤名")
 							if (signer.sign){
 								signer.sign(objUnit, assocPrivatePayloads, address, path, function(err, signature){
 									if (err)
@@ -521,6 +526,7 @@ function composeJoint(params){
 					);
 				},
 				function(err){
+					console.log("=======================執行結束")
 					if (err)
 						return handleError(err);
 					objUnit.unit = objectHash.getUnitHash(objUnit);
@@ -528,6 +534,8 @@ function composeJoint(params){
 						objJoint.ball = objectHash.getBallHash(objUnit.unit);
 					console.log(require('util').inspect(objJoint, {depth:null}));
 					objJoint.unit.timestamp = Math.round(Date.now()/1000); // light clients need timestamp
+					console.log("======================:" + (Object.keys(assocPrivatePayloads).length === 0))
+					console.log(JSON.stringify(objUnit))
 					if (Object.keys(assocPrivatePayloads).length === 0)
 						assocPrivatePayloads = null;
 					//profiler.stop('compose');
@@ -685,6 +693,7 @@ function getSavingCallbacks(callbacks){
 		ifError: callbacks.ifError,
 		ifNotEnoughFunds: callbacks.ifNotEnoughFunds,
 		ifOk: function(objJoint, assocPrivatePayloads, composer_unlock){
+			console.log("=============== login ifOk");
 			var objUnit = objJoint.unit;
 			var unit = objUnit.unit;
 			validation.validate(objJoint, {

@@ -1,6 +1,6 @@
 # Style Guide
 
-This document defines the code style rules for all byteball projects, i.e. all projects under https://github.com/byteball, not just this repo byteballcore.
+This document defines the code style rules for all luxalpa projects, i.e. all projects under https://github.com/luxalpa, not just this repo core.
 
 ## General principle
 

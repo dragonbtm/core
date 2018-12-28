@@ -192,7 +192,8 @@ function calcHeadersCommissions(conn, onDone){
 										var child_unit = row.unit;
 										for (var payer_unit in assocWonAmounts[child_unit]){
 											var full_amount = assocWonAmounts[child_unit][payer_unit];
-											if (!full_amount)
+											console.log("=============full_amount:" + full_amount)
+											if (full_amount<0)
 												throw Error("no amount for child unit "+child_unit+", payer unit "+payer_unit);
 											// note that we round _before_ summing up header commissions won from several parent units
 											var amount = (row.earned_headers_commission_share === 100) 

@@ -209,7 +209,9 @@ function updateMainChain(conn, from_unit, last_added_unit, onDone){
 								if (err)
 									throw Error("goDownAndUpdateMainChainIndex eachSeries failed");
 								conn.query(
-									"UPDATE unit_authors SET _mci=NULL WHERE unit IN(SELECT unit FROM units WHERE main_chain_index IS NULL)", 
+									(conf.storage === 'mysql')
+										? "UPDATE units LEFT JOIN unit_authors USING(unit) SET _mci=NULL WHERE main_chain_index IS NULL"
+										: "UPDATE unit_authors SET _mci=NULL WHERE unit IN(SELECT unit FROM units WHERE main_chain_index IS NULL)", 
 									function(){
 										profiler.stop('mc-goDown');
 										updateLatestIncludedMcIndex(last_main_chain_index, true);
@@ -254,7 +256,7 @@ function updateMainChain(conn, from_unit, last_added_unit, onDone){
 					(result.affectedRows > 0) ? propagateLIMCI() : checkAllLatestIncludedMcIndexesAreSet();
 				}
 				*/
-				"SELECT punits.latest_included_mc_index, chunits.unit \n\
+				"SELECT punits.latest_included_mc_index, chunits.unit ,chunits.main_chain_index ,chunits.latest_included_mc_index as lastest,punits.unit as punit  \n\
 				FROM units AS punits \n\
 				JOIN parenthoods ON punits.unit=parent_unit \n\
 				JOIN units AS chunits ON child_unit=chunits.unit \n\
@@ -697,9 +699,10 @@ function determineIfStableInLaterUnits(conn, earlier_unit, arrLaterUnits, handle
 	if (storage.isGenesisUnit(earlier_unit))
 		return handleResult(true);
 	// hack to workaround past validation error
-	if (earlier_unit === 'LGFzduLJNQNzEqJqUXdkXr58wDYx77V8WurDF3+GIws=' && arrLaterUnits.join(',') === '6O4t3j8kW0/Lo7n2nuS8ITDv2UbOhlL9fF1M6j/PrJ4=')
-		return handleResult(true);
-	if (earlier_unit === 'VLdMzBDVpwqu+3OcZrBrmkT0aUb/mZ0O1IveDmGqIP0=' && arrLaterUnits.join(',') === 'pAfErVAA5CSPeh1KoLidDTgdt5Blu7k2rINtxVTMq4k=')
+	if (earlier_unit === 'LGFzduLJNQNzEqJqUXdkXr58wDYx77V8WurDF3+GIws=' && arrLaterUnits.join(',') === '6O4t3j8kW0/Lo7n2nuS8ITDv2UbOhlL9fF1M6j/PrJ4='
+		|| earlier_unit === 'VLdMzBDVpwqu+3OcZrBrmkT0aUb/mZ0O1IveDmGqIP0=' && arrLaterUnits.join(',') === 'pAfErVAA5CSPeh1KoLidDTgdt5Blu7k2rINtxVTMq4k='
+		|| earlier_unit === 'P2gqiei+7dur/gS1KOFHg0tiEq2+7l321AJxM3o0f5Q=' && arrLaterUnits.join(',') === '9G8kctAVAiiLf4/cyU2f4gdtD+XvKd1qRp0+k3qzR8o='
+	)
 		return handleResult(true);
 	var start_time = Date.now();
 	storage.readPropsOfUnits(conn, earlier_unit, arrLaterUnits, function(objEarlierUnitProps, arrLaterUnitProps){
@@ -761,8 +764,8 @@ function determineIfStableInLaterUnits(conn, earlier_unit, arrLaterUnits, handle
 								findMinMcWitnessedLevelOld(function(old_min_mc_wl){
 									var diff = min_mc_wl - old_min_mc_wl;
 									console.log("---------- new min_mc_wl="+min_mc_wl+", old min_mc_wl="+old_min_mc_wl+", diff="+diff+", later "+arrLaterUnits.join(', '));
-								//	if (diff < 0)
-								//		throw Error("new min_mc_wl="+min_mc_wl+", old min_mc_wl="+old_min_mc_wl+", diff="+diff+" for earlier "+earlier_unit+", later "+arrLaterUnits.join(', '));
+									//if (diff < 0)
+									//	throw Error("new min_mc_wl="+min_mc_wl+", old min_mc_wl="+old_min_mc_wl+", diff="+diff+" for earlier "+earlier_unit+", later "+arrLaterUnits.join(', '));
 									handleMinMcWl(Math.max(old_min_mc_wl, min_mc_wl));
 								});
 							}

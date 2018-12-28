@@ -6,6 +6,7 @@ var constants = require("./constants.js");
 var paid_witnessing = require("./paid_witnessing.js");
 var headers_commission = require("./headers_commission.js");
 var mc_outputs = require("./mc_outputs.js");
+var conf = require("./conf.js");
 
 var TRANSFER_INPUT_SIZE = 0 // type: "transfer" omitted
 	+ 44 // unit
@@ -87,7 +88,7 @@ function pickDivisibleCoinsForAmount(conn, objAsset, arrAddresses, last_ball_mci
 			WHERE address IN(?) AND asset"+(asset ? "="+conn.escape(asset) : " IS NULL")+" AND is_spent=0 AND amount "+more+" ? \n\
 				AND sequence='good' "+confirmation_condition+" \n\
 			ORDER BY is_stable DESC, amount LIMIT 1",
-			[arrSpendableAddresses, amount+is_base*TRANSFER_INPUT_SIZE],
+			[arrSpendableAddresses, (!conf.bLight) ? amount : amount+is_base*TRANSFER_INPUT_SIZE],
 			function(rows){
 				if (rows.length === 1){
 					var input = rows[0];
@@ -117,7 +118,7 @@ function pickDivisibleCoinsForAmount(conn, objAsset, arrAddresses, last_ball_mci
 					function(row, cb){
 						var input = row;
 						objectHash.cleanNulls(input);
-						required_amount += is_base*TRANSFER_INPUT_SIZE;
+						required_amount += (!conf.bLight) ? 0 : is_base*TRANSFER_INPUT_SIZE;
 						addInput(input);
 						// if we allow equality, we might get 0 amount for change which is invalid
 						var bFound = is_base ? (total_amount > required_amount) : (total_amount >= required_amount);
@@ -149,7 +150,8 @@ function pickDivisibleCoinsForAmount(conn, objAsset, arrAddresses, last_ball_mci
 		async.eachSeries(
 			arrAddresses,
 			function(address, cb){
-				var target_amount = required_amount + input_size + (bMultiAuthored ? ADDRESS_SIZE : 0) - total_amount;
+				var target_amount = (!conf.bLight)
+					? 0 : required_amount + input_size + (bMultiAuthored ? ADDRESS_SIZE : 0) - total_amount;
 				mc_outputs.findMcIndexIntervalToTargetAmount(conn, type, address, max_mci, target_amount, {
 					ifNothing: cb,
 					ifFound: function(from_mc_index, to_mc_index, earnings, bSufficient){
