@@ -106,11 +106,11 @@ if (typeof window === 'undefined' || !window.cordova){ // desktop
 if (exports.storage === 'mysql'){
 	exports.database.max_connections = exports.database.max_connections || 30;
 	exports.database.host = exports.database.host || 'localhost';
-	exports.database.name = exports.database.name || 'luxalpa';
-	exports.database.user = exports.database.user || 'luxalpa';
+	exports.database.name = exports.database.name || '-';
+	exports.database.user = exports.database.user || '-';
 }
 else if (exports.storage === 'sqlite'){
 	exports.database.max_connections = exports.database.max_connections || 1;
-	exports.database.filename = exports.database.filename || (exports.bLight ? 'luxalpa-light.sqlite' : 'luxalpa.sqlite');
+	exports.database.filename = exports.database.filename || (exports.bLight ? 'core-light.sqlite' : 'core.sqlite');
 }
 

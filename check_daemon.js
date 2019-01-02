@@ -34,10 +34,10 @@ function checkDaemonAndRestart(daemon_name, start_command){
 			console.log("服務已經啓動~!")
 			return;
 		}
-
+		child_process.exec("nvm use 5").unref();
+		child_process.exec(start_command).unref();
 		notifyAdmin('daemon '+daemon_name+' is down, trying to restart '+start_command,function () {
-			child_process.exec("nvm use 5").unref();
-			child_process.exec(start_command).unref();
+
 			process.exit();
 		});
 
@@ -60,6 +60,7 @@ function write(str){
 	console.log(Date().toString()+': '+str);
 }
 
+exports.notifyAdmin = notifyAdmin;
 exports.checkDaemon = checkDaemon;
 exports.checkDaemonAndNotify = checkDaemonAndNotify;
 exports.checkDaemonAndRestart = checkDaemonAndRestart;
