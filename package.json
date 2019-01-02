@@ -1,6 +1,7 @@
 {
 	"name": "core",
 	"description": "Core",
+	"author": "core",
 	"version": "0.2.93",
 	"keywords": [
 		"DAG",
