@@ -11,10 +11,10 @@ function readBalance(wallet, handleBalance){
 	var assocBalances = {base: {stable: 0, pending: 0}};
 	assocBalances[constants.BLACKBYTES_ASSET] = {is_private: 1, stable: 0, pending: 0};
 	db.query(
-		"SELECT asset, is_stable, SUM(amount) AS balance \n\
+		"SELECT ifnull(assets.assets_name,asset) as asset, is_stable, SUM(amount) AS balance \n\
 		FROM outputs "+join_my_addresses+" CROSS JOIN units USING(unit) \n\
 		WHERE is_spent=0 AND "+where_condition+" AND sequence='good' \n\
-		GROUP BY asset, is_stable",
+		GROUP BY ifnull(assets.assets_name,asset), is_stable",
 		[wallet],
 		function(rows){
 			for (var i=0; i<rows.length; i++){
@@ -38,7 +38,7 @@ function readBalance(wallet, handleBalance){
 					}
 					// add 0-balance assets
 					db.query(
-						"SELECT DISTINCT outputs.asset, is_private \n\
+						"SELECT DISTINCT ifnull(assets.assets_name,outputs.asset) as asset , is_private \n\
 						FROM outputs "+join_my_addresses+" \n\
 						CROSS JOIN units USING(unit) \n\
 						LEFT JOIN assets ON outputs.asset=assets.unit \n\
@@ -69,10 +69,10 @@ function readOutputsBalance(wallet, handleBalance){
 	var where_condition = walletIsAddress ? "address=?" : "wallet=?";
 	var assocBalances = {base: {stable: 0, pending: 0}};
 	db.query(
-		"SELECT asset, is_stable, SUM(amount) AS balance \n\
+		"SELECT ifnull(assets.assets_name,asset) as asset, is_stable, SUM(amount) AS balance \n\
 		FROM outputs "+join_my_addresses+" CROSS JOIN units USING(unit) \n\
 		WHERE is_spent=0 AND "+where_condition+" AND sequence='good' \n\
-		GROUP BY asset, is_stable",
+		GROUP BY ifnull(assets.assets_name,asset), is_stable",
 		[wallet],
 		function(rows){
 			for (var i=0; i<rows.length; i++){
@@ -120,10 +120,10 @@ function readSharedBalance(wallet, handleBalance){
 			return handleBalance(assocBalances);
 		var strAddressList = arrSharedAddresses.map(db.escape).join(', ');
 		db.query(
-			"SELECT asset, address, is_stable, SUM(amount) AS balance \n\
+			"SELECT ifnull(assets.assets_name,asset) as asset, address, is_stable, SUM(amount) AS balance \n\
 			FROM outputs CROSS JOIN units USING(unit) \n\
 			WHERE is_spent=0 AND sequence='good' AND address IN("+strAddressList+") \n\
-			GROUP BY asset, address, is_stable \n\
+			GROUP BY ifnull(assets.assets_name,asset), address, is_stable \n\
 			UNION ALL \n\
 			SELECT NULL AS asset, address, 1 AS is_stable, SUM(amount) AS balance FROM witnessing_outputs \n\
 			WHERE is_spent=0 AND address IN("+strAddressList+") GROUP BY address \n\

@@ -400,7 +400,18 @@ function composeAndSaveMinimalDivisibleAssetPaymentJoint(params){
 	composeMinimalDivisibleAssetPaymentJoint(params_with_save);
 }
 
+function findeAssetUnitID(asset){
+	db.query(
+		"SELECT unit  FROM assets where assets_name=?",[asset],function (rows) {
+			if(rows.length > 0){
+				throwError("'The same asset name already exists. Please change the name and submit it!'");
+			}
+		}
+	);
+}
 
+
+exports.findeAssetUnitID = findeAssetUnitID;
 exports.validateAndSavePrivatePaymentChain = validateAndSavePrivatePaymentChain;
 exports.composeAndSaveDivisibleAssetPaymentJoint = composeAndSaveDivisibleAssetPaymentJoint;
 exports.composeAndSaveMinimalDivisibleAssetPaymentJoint = composeAndSaveMinimalDivisibleAssetPaymentJoint;

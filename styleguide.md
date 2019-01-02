@@ -1,6 +1,6 @@
 # Style Guide
 
-This document defines the code style rules for all luxalpa projects, i.e. all projects under https://github.com/luxalpa, not just this repo core.
+This document defines the code style rules for all - projects, i.e. all projects under https://github.com/-, not just this repo core.
 
 ## General principle
 

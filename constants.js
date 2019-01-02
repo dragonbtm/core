@@ -2,7 +2,7 @@
 "use strict";
 
 exports.COUNT_WITNESSES = 6;
-exports.MAX_WITNESS_LIST_MUTATIONS = 1;
+exports.MAX_WITNESS_LIST_MUTATIONS = 3;
 exports.TOTAL_WHITEBYTES = 77e14;
 exports.MAJORITY_OF_WITNESSES = (exports.COUNT_WITNESSES%2===0) ? (exports.COUNT_WITNESSES/2+1) : Math.ceil(exports.COUNT_WITNESSES/2);
 exports.COUNT_MC_BALLS_FOR_PAID_WITNESSING = 100;
@@ -10,8 +10,8 @@ exports.COUNT_MC_BALLS_FOR_PAID_WITNESSING = 100;
 exports.version = '1.0dev';
 exports.alt = '3';
 
-exports.GENESIS_UNIT = 'ytRE6K89KmQ+QssqYfe1kV340fgjB9vFNExcgZSb54k=';
-exports.BLACKBYTES_ASSET = 'Dk3ntFzsH51x0l4z86hIZ+YQDRAUiE06C7WYJds8r84=';
+exports.GENESIS_UNIT = '38FDN2M/EMauuO6wDSIwK6j/RoCdBuYCNYhDAHF+kSU=';
+exports.BLACKBYTES_ASSET = 'POtCADVPvBJDO6Z/9Nt994hrBCLwtQ039fN+T0l6GpE=';
 
 
 

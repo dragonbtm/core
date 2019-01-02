@@ -184,12 +184,14 @@ function saveJoint(objJoint, objValidationState, preCommitCallback, onDone) {
 							conn.addQuery(arrQueries, "INSERT INTO assets (unit, message_index, \n\
 								cap, is_private, is_transferrable, auto_destroy, fixed_denominations, \n\
 								issued_by_definer_only, cosigned_by_definer, spender_attested, \n\
-								issue_condition, transfer_condition) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", 
+								issue_condition, transfer_condition,assets_name) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
 								[objUnit.unit, i, 
 								asset.cap, asset.is_private?1:0, asset.is_transferrable?1:0, asset.auto_destroy?1:0, asset.fixed_denominations?1:0, 
 								asset.issued_by_definer_only?1:0, asset.cosigned_by_definer?1:0, asset.spender_attested?1:0, 
 								asset.issue_condition ? JSON.stringify(asset.issue_condition) : null,
-								asset.transfer_condition ? JSON.stringify(asset.transfer_condition) : null]);
+								asset.transfer_condition ? JSON.stringify(asset.transfer_condition) : null,
+								asset.assets_name]);
+
 							if (asset.attestors){
 								for (var j=0; j<asset.attestors.length; j++){
 									conn.addQuery(arrQueries, 
