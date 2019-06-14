@@ -10,8 +10,8 @@ exports.COUNT_MC_BALLS_FOR_PAID_WITNESSING = 100;
 exports.version = '1.0dev';
 exports.alt = '3';
 
-exports.GENESIS_UNIT = 'ytRE6K89KmQ+QssqYfe1kV340fgjB9vFNExcgZSb54k=';
-exports.BLACKBYTES_ASSET = 'Dk3ntFzsH51x0l4z86hIZ+YQDRAUiE06C7WYJds8r84=';
+exports.GENESIS_UNIT = '2F/baE75oOPK3EGUtC7pPyOeGYMfF1vl8fKDTOmvqWE=';
+exports.BLACKBYTES_ASSET = 'rxgWZHIbLVuG/bzCH2DKw3qrJ6x4Icc2N2SzGdtSEt0=';
 
 
 
