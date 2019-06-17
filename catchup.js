@@ -8,7 +8,9 @@ var db = require('./db.js');
 var mutex = require('./mutex.js');
 var validation = require('./validation.js');
 var witnessProof = require('./witness_proof.js');
+var proofChain = require('./proof_chain.js');
 
+var MAX_CATCHUP_CHAIN_LENGTH = 1000000; // how many MCIs long
 
 
 function prepareCatchupChain(catchupRequest, callbacks){
@@ -17,7 +19,7 @@ function prepareCatchupChain(catchupRequest, callbacks){
 	var last_stable_mci = catchupRequest.last_stable_mci;
 	var last_known_mci = catchupRequest.last_known_mci;
 	var arrWitnesses = catchupRequest.witnesses;
-	
+
 	if (typeof last_stable_mci !== "number")
 		return callbacks.ifError("no last_stable_mci");
 	if (typeof last_known_mci !== "number")
@@ -30,11 +32,14 @@ function prepareCatchupChain(catchupRequest, callbacks){
 	mutex.lock(['prepareCatchupChain'], function(unlock){
 		var start_ts = Date.now();
 		var objCatchupChain = {
-			unstable_mc_joints: [], 
+			unstable_mc_joints: [],
 			stable_last_ball_joints: [],
 			witness_change_and_definition_joints: []
 		};
 		var last_ball_unit = null;
+		var last_ball_mci = null;
+		var last_chain_unit = null;
+		var bTooLong;
 		async.series([
 			function(cb){ // check if the peer really needs hash trees
 				db.query("SELECT is_stable FROM units WHERE is_on_main_chain=1 AND main_chain_index=?", [last_known_mci], function(rows){
@@ -47,7 +52,7 @@ function prepareCatchupChain(catchupRequest, callbacks){
 			},
 			function(cb){
 				witnessProof.prepareWitnessProof(
-					arrWitnesses, last_stable_mci, 
+					arrWitnesses, last_stable_mci,
 					function(err, arrUnstableMcJoints, arrWitnessChangeAndDefinitionJoints, _last_ball_unit, _last_ball_mci){
 						if (err)
 							return cb(err);
@@ -55,14 +60,27 @@ function prepareCatchupChain(catchupRequest, callbacks){
 						if (arrWitnessChangeAndDefinitionJoints.length > 0)
 							objCatchupChain.witness_change_and_definition_joints = arrWitnessChangeAndDefinitionJoints;
 						last_ball_unit = _last_ball_unit;
+						last_ball_mci = _last_ball_mci;
+						bTooLong = (last_ball_mci - last_stable_mci > MAX_CATCHUP_CHAIN_LENGTH);
 						cb();
 					}
 				);
 			},
+			function(cb){
+				if (!bTooLong){ // short chain, no need for proof chain
+					last_chain_unit = last_ball_unit;
+					return cb();
+				}
+				objCatchupChain.proofchain_balls = [];
+				proofChain.buildProofChainOnMc(last_ball_mci + 1, last_stable_mci + MAX_CATCHUP_CHAIN_LENGTH, objCatchupChain.proofchain_balls, function(){
+					last_chain_unit = objCatchupChain.proofchain_balls[objCatchupChain.proofchain_balls.length - 1].unit;
+					cb();
+				});
+			},
 			function(cb){ // jump by last_ball references until we land on or behind last_stable_mci
 				if (!last_ball_unit)
 					return cb();
-				goUp(last_ball_unit);
+				goUp(last_chain_unit);
 
 				function goUp(unit){
 					storage.readJointWithBall(db, unit, function(objJoint){
@@ -101,22 +119,55 @@ function processCatchupChain(catchupChain, peer, arrWitnesses, callbacks){
 		catchupChain.witness_change_and_definition_joints = [];
 	if (!Array.isArray(catchupChain.witness_change_and_definition_joints))
 		return callbacks.ifError("witness_change_and_definition_joints must be array");
-	
+	if (!catchupChain.proofchain_balls)
+		catchupChain.proofchain_balls = [];
+	if (!Array.isArray(catchupChain.proofchain_balls))
+		return callbacks.ifError("proofchain_balls must be array");
+
 	witnessProof.processWitnessProof(
 		catchupChain.unstable_mc_joints, catchupChain.witness_change_and_definition_joints, true, arrWitnesses,
 		function(err, arrLastBallUnits, assocLastBallByLastBallUnit){
-			
+
 			if (err)
 				return callbacks.ifError(err);
-		
-			var objFirstStableJoint = catchupChain.stable_last_ball_joints[0];
-			var objFirstStableUnit = objFirstStableJoint.unit;
-			if (arrLastBallUnits.indexOf(objFirstStableUnit.unit) === -1)
-				return callbacks.ifError("first stable unit is not last ball unit of any unstable unit");
-			var last_ball_unit = objFirstStableUnit.unit;
-			var last_ball = assocLastBallByLastBallUnit[last_ball_unit];
-			if (objFirstStableJoint.ball !== last_ball)
-				return callbacks.ifError("last ball and last ball unit do not match: "+objFirstStableJoint.ball+"!=="+last_ball);
+
+			if (catchupChain.proofchain_balls.length > 0){
+				var assocKnownBalls = {};
+				for (var unit in assocLastBallByLastBallUnit){
+					var ball = assocLastBallByLastBallUnit[unit];
+					assocKnownBalls[ball] = true;
+				}
+
+				// proofchain
+				for (var i=0; i<catchupChain.proofchain_balls.length; i++){
+					var objBall = catchupChain.proofchain_balls[i];
+					if (objBall.ball !== objectHash.getBallHash(objBall.unit, objBall.parent_balls, objBall.skiplist_balls, objBall.is_nonserial))
+						return callbacks.ifError("wrong ball hash: unit "+objBall.unit+", ball "+objBall.ball);
+					if (!assocKnownBalls[objBall.ball])
+						return callbacks.ifError("ball not known: "+objBall.ball+', unit='+objBall.unit+', i='+i+', unstable: '+catchupChain.unstable_mc_joints.map(function(j){ return j.unit.unit }).join(', ')+', arrLastBallUnits '+arrLastBallUnits.join(', '));
+					objBall.parent_balls.forEach(function(parent_ball){
+						assocKnownBalls[parent_ball] = true;
+					});
+					if (objBall.skiplist_balls)
+						objBall.skiplist_balls.forEach(function(skiplist_ball){
+							assocKnownBalls[skiplist_ball] = true;
+						});
+				}
+				assocKnownBalls = null; // free memory
+				var objEarliestProofchainBall = catchupChain.proofchain_balls[catchupChain.proofchain_balls.length - 1];
+				var last_ball_unit = objEarliestProofchainBall.unit;
+				var last_ball = objEarliestProofchainBall.ball;
+			}
+			else{
+				var objFirstStableJoint = catchupChain.stable_last_ball_joints[0];
+				var objFirstStableUnit = objFirstStableJoint.unit;
+				if (arrLastBallUnits.indexOf(objFirstStableUnit.unit) === -1)
+					return callbacks.ifError("first stable unit is not last ball unit of any unstable unit");
+				var last_ball_unit = objFirstStableUnit.unit;
+				var last_ball = assocLastBallByLastBallUnit[last_ball_unit];
+				if (objFirstStableJoint.ball !== last_ball)
+					return callbacks.ifError("last ball and last ball unit do not match: "+objFirstStableJoint.ball+"!=="+last_ball);
+			}
 
 			// stable joints
 			var arrChainBalls = [];
@@ -152,8 +203,8 @@ function processCatchupChain(catchupChain, peer, arrWitnesses, callbacks){
 				},
 				function(cb){ // adjust first chain ball if necessary and make sure it is the only stable unit in the entire chain
 					db.query(
-						"SELECT is_stable, is_on_main_chain, main_chain_index FROM balls JOIN units USING(unit) WHERE ball=?", 
-						[arrChainBalls[0]], 
+						"SELECT is_stable, is_on_main_chain, main_chain_index FROM balls JOIN units USING(unit) WHERE ball=?",
+						[arrChainBalls[0]],
 						function(rows){
 							if (rows.length === 0){
 								if (storage.isGenesisBall(arrChainBalls[0]))
@@ -214,8 +265,8 @@ function readHashTree(hashTreeRequest, callbacks){
 	var from_mci;
 	var to_mci;
 	db.query(
-		"SELECT is_stable, is_on_main_chain, main_chain_index, ball FROM balls JOIN units USING(unit) WHERE ball IN(?,?)", 
-		[from_ball, to_ball], 
+		"SELECT is_stable, is_on_main_chain, main_chain_index, ball FROM balls JOIN units USING(unit) WHERE ball IN(?,?)",
+		[from_ball, to_ball],
 		function(rows){
 			if (rows.length !== 2)
 				return callbacks.ifError("some balls not found");
@@ -236,8 +287,8 @@ function readHashTree(hashTreeRequest, callbacks){
 			var op = (from_mci === 0) ? ">=" : ">"; // if starting from 0, add genesis itself
 			db.query(
 				"SELECT unit, ball, content_hash FROM units LEFT JOIN balls USING(unit) \n\
-				WHERE main_chain_index "+op+" ? AND main_chain_index<=? ORDER BY main_chain_index, `level`", 
-				[from_mci, to_mci], 
+				WHERE main_chain_index "+op+" ? AND main_chain_index<=? ORDER BY main_chain_index, `level`",
+				[from_mci, to_mci],
 				function(ball_rows){
 					async.eachSeries(
 						ball_rows,
@@ -248,7 +299,7 @@ function readHashTree(hashTreeRequest, callbacks){
 								objBall.is_nonserial = true;
 							delete objBall.content_hash;
 							db.query(
-								"SELECT ball FROM parenthoods LEFT JOIN balls ON parent_unit=balls.unit WHERE child_unit=? ORDER BY ball", 
+								"SELECT ball FROM parenthoods LEFT JOIN balls ON parent_unit=balls.unit WHERE child_unit=? ORDER BY ball",
 								[objBall.unit],
 								function(parent_rows){
 									if (parent_rows.some(function(parent_row){ return !parent_row.ball; }))
@@ -256,7 +307,7 @@ function readHashTree(hashTreeRequest, callbacks){
 									if (parent_rows.length > 0)
 										objBall.parent_balls = parent_rows.map(function(parent_row){ return parent_row.ball; });
 									db.query(
-										"SELECT ball FROM skiplist_units LEFT JOIN balls ON skiplist_unit=balls.unit WHERE skiplist_units.unit=? ORDER BY ball", 
+										"SELECT ball FROM skiplist_units LEFT JOIN balls ON skiplist_unit=balls.unit WHERE skiplist_units.unit=? ORDER BY ball",
 										[objBall.unit],
 										function(srows){
 											if (srows.some(function(srow){ return !srow.ball; }))
@@ -285,15 +336,15 @@ function processHashTree(arrBalls, callbacks){
 	if (!Array.isArray(arrBalls))
 		return callbacks.ifError("no balls array");
 	mutex.lock(["hash_tree"], function(unlock){
-		
+
 		db.query("SELECT 1 FROM hash_tree_balls LIMIT 1", function(ht_rows){
 			//if (ht_rows.length > 0) // duplicate
 			//    return unlock();
-			
+
 			db.takeConnectionFromPool(function(conn){
-				
+
 				conn.query("BEGIN", function(){
-					
+
 					var max_mci = null;
 					async.eachSeries(
 						arrBalls,
@@ -312,13 +363,14 @@ function processHashTree(arrBalls, callbacks){
 								return cb("wrong ball hash, ball "+objBall.ball+", unit "+objBall.unit);
 
 							function addBall(){
+								storage.assocHashTreeUnitsByBall[objBall.ball] = objBall.unit;
 								// insert even if it already exists in balls, because we need to define max_mci by looking outside this hash tree
 								conn.query("INSERT "+conn.getIgnore()+" INTO hash_tree_balls (ball, unit) VALUES(?,?)", [objBall.ball, objBall.unit], function(){
 									cb();
 									//console.log("inserted unit "+objBall.unit, objBall.ball);
 								});
 							}
-							
+
 							function checkSkiplistBallsExist(){
 								if (!objBall.skiplist_balls)
 									return addBall();
@@ -342,8 +394,8 @@ function processHashTree(arrBalls, callbacks){
 								var arrFoundBalls = rows.map(function(row) { return row.ball; });
 								var arrMissingBalls = _.difference(objBall.parent_balls, arrFoundBalls);
 								conn.query(
-									"SELECT ball, main_chain_index, is_on_main_chain FROM balls JOIN units USING(unit) WHERE ball IN(?)", 
-									[arrMissingBalls], 
+									"SELECT ball, main_chain_index, is_on_main_chain FROM balls JOIN units USING(unit) WHERE ball IN(?)",
+									[arrMissingBalls],
 									function(rows2){
 										if (rows2.length !== arrMissingBalls.length)
 											return cb("some parents not found, unit "+objBall.unit);
@@ -358,7 +410,7 @@ function processHashTree(arrBalls, callbacks){
 							});
 						},
 						function(error){
-							
+
 							function finish(err){
 								conn.query(err ? "ROLLBACK" : "COMMIT", function(){
 									conn.release();
@@ -369,28 +421,28 @@ function processHashTree(arrBalls, callbacks){
 
 							if (error)
 								return finish(error);
-							
+
 							// it is ok that max_mci === null as the 2nd tree does not touch finished balls
 							//if (max_mci === null && !storage.isGenesisUnit(arrBalls[0].unit))
 							//    return finish("max_mci not defined");
-							
+
 							// check that the received tree matches the first pair of chain elements
 							conn.query(
 								"SELECT ball, main_chain_index \n\
 								FROM catchup_chain_balls LEFT JOIN balls USING(ball) LEFT JOIN units USING(unit) \n\
-								ORDER BY member_index LIMIT 2", 
+								ORDER BY member_index LIMIT 2",
 								function(rows){
-									
+
 									if (rows.length !== 2)
 										return finish("expecting to have 2 elements in the chain");
 									// removed: the main chain might be rebuilt if we are sending new units while syncing
-								//	if (max_mci !== null && rows[0].main_chain_index !== null && rows[0].main_chain_index !== max_mci)
-								//		return finish("max mci doesn't match first chain element: max mci = "+max_mci+", first mci = "+rows[0].main_chain_index);
+									//	if (max_mci !== null && rows[0].main_chain_index !== null && rows[0].main_chain_index !== max_mci)
+									//		return finish("max mci doesn't match first chain element: max mci = "+max_mci+", first mci = "+rows[0].main_chain_index);
 									if (rows[1].ball !== arrBalls[arrBalls.length-1].ball)
 										return finish("tree root doesn't match second chain element");
-									// remove the last chain element, we now have hash tree instead
+									// remove the oldest chain element, we now have hash tree instead
 									conn.query("DELETE FROM catchup_chain_balls WHERE ball=?", [rows[0].ball], function(){
-										
+
 										purgeHandledBallsFromHashTree(conn, finish);
 									});
 								}
@@ -408,6 +460,9 @@ function purgeHandledBallsFromHashTree(conn, onDone){
 		if (rows.length === 0)
 			return onDone();
 		var arrHandledBalls = rows.map(function(row){ return row.ball; });
+		arrHandledBalls.forEach(function(ball){
+			delete storage.assocHashTreeUnitsByBall[ball];
+		});
 		conn.query("DELETE FROM hash_tree_balls WHERE ball IN(?)", [arrHandledBalls], function(){
 			onDone();
 		});

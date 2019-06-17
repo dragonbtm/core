@@ -13,11 +13,11 @@ var validation = require('./validation.js');
 function prepareWitnessProof(arrWitnesses, last_stable_mci, handleResult){
 	var arrWitnessChangeAndDefinitionJoints = [];
 	var arrUnstableMcJoints = [];
-	
+
 	var arrLastBallUnits = []; // last ball units referenced from MC-majority-witnessed unstable MC units
 	var last_ball_unit = null;
 	var last_ball_mci = null;
-	
+
 	async.series([
 		function(cb){
 			storage.determineIfWitnessAddressDefinitionsHaveReferences(db, arrWitnesses, function(bWithReferences){
@@ -68,7 +68,7 @@ function prepareWitnessProof(arrWitnesses, last_stable_mci, handleResult){
 					ON units.unit=address_definition_changes.unit AND unit_authors.address=address_definition_changes.address \n\
 				WHERE unit_authors.address IN(?) AND "+after_last_stable_mci_cond+" AND is_stable=1 AND sequence='good' \n\
 					AND (unit_authors.definition_chash IS NOT NULL OR address_definition_changes.unit IS NOT NULL) \n\
-				ORDER BY `level`", 
+				ORDER BY `level`",
 				[arrWitnesses],*/
 				// 1. initial definitions
 				// 2. address_definition_changes
@@ -88,7 +88,7 @@ function prepareWitnessProof(arrWitnesses, last_stable_mci, handleResult){
 				CROSS JOIN unit_authors USING(address, definition_chash) \n\
 				CROSS JOIN units ON unit_authors.unit=units.unit \n\
 				WHERE address_definition_changes.address IN(?) AND "+after_last_stable_mci_cond+" AND is_stable=1 AND sequence='good' \n\
-				ORDER BY `level`", 
+				ORDER BY `level`",
 				[arrWitnesses, arrWitnesses, arrWitnesses],
 				function(rows){
 					async.eachSeries(rows, function(row, cb2){
@@ -183,16 +183,21 @@ function processWitnessProof(arrUnstableMcJoints, arrWitnessChangeAndDefinitionJ
 			objUnit.authors,
 			function(author, cb3){
 				var address = author.address;
-			//	if (arrWitnesses.indexOf(address) === -1) // not a witness - skip it
-			//		return cb3();
+				//	if (arrWitnesses.indexOf(address) === -1) // not a witness - skip it
+				//		return cb3();
 				var definition_chash = assocDefinitionChashes[address];
 				if (!definition_chash && arrWitnesses.indexOf(address) === -1) // not a witness - skip it
 					return cb3();
 				if (!definition_chash)
 					throw Error("definition chash not known for address "+address+", unit "+objUnit.unit);
 				if (author.definition){
-					if (objectHash.getChash160(author.definition) !== definition_chash)
-						return cb3("definition doesn't hash to the expected value");
+					try{
+						if (objectHash.getChash160(author.definition) !== definition_chash)
+							return cb3("definition doesn't hash to the expected value");
+					}
+					catch(e){
+						return cb3("failed to calc definition chash: " +e);
+					}
 					assocDefinitions[definition_chash] = author.definition;
 					bFound = true;
 				}
@@ -204,8 +209,8 @@ function processWitnessProof(arrUnstableMcJoints, arrWitnessChangeAndDefinitionJ
 							return cb3(err);
 						for (var i=0; i<objUnit.messages.length; i++){
 							var message = objUnit.messages[i];
-							if (message.app === 'address_definition_change' 
-									&& (message.payload.address === address || objUnit.authors.length === 1 && objUnit.authors[0].address === address)){
+							if (message.app === 'address_definition_change'
+								&& (message.payload.address === address || objUnit.authors.length === 1 && objUnit.authors[0].address === address)){
 								assocDefinitionChashes[address] = message.payload.definition_chash;
 								bFound = true;
 							}
@@ -246,7 +251,7 @@ function processWitnessProof(arrUnstableMcJoints, arrWitnessChangeAndDefinitionJ
 				return cb();
 			}
 			async.eachSeries(
-				arrWitnesses, 
+				arrWitnesses,
 				function(address, cb2){
 					storage.readDefinitionByAddress(db, address, null, {
 						ifFound: function(arrDefinition){

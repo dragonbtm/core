@@ -17,12 +17,12 @@ var profiler = require('./profiler.js');
 var NOT_ENOUGH_FUNDS_ERROR_MESSAGE = "not enough indivisible asset coins that fit the desired amount within the specified tolerances, make sure all your funds are confirmed";
 
 function validatePrivatePayment(conn, objPrivateElement, objPrevPrivateElement, callbacks){
-		
+
 	function validateSpendProof(spend_proof, cb){
 		profiler.start();
 		conn.query(
-			"SELECT spend_proof, address FROM spend_proofs WHERE unit=? AND message_index=?", 
-			[objPrivateElement.unit, objPrivateElement.message_index], 
+			"SELECT spend_proof, address FROM spend_proofs WHERE unit=? AND message_index=?",
+			[objPrivateElement.unit, objPrivateElement.message_index],
 			function(rows){
 				profiler.stop('spend_proof');
 				if (rows.length !== 1)
@@ -39,7 +39,7 @@ function validatePrivatePayment(conn, objPrivateElement, objPrevPrivateElement, 
 			}
 		);
 	}
-	
+
 	function validateSourceOutput(cb){
 		if (conf.bLight)
 			return cb(); // already validated the linkproof
@@ -49,7 +49,7 @@ function validatePrivatePayment(conn, objPrivateElement, objPrevPrivateElement, 
 			bIncluded ? cb() : cb("input unit not included");
 		});
 	}
-		
+
 	var payload = objPrivateElement.payload;
 	if (!ValidationUtils.isStringOfLength(payload.asset, constants.HASH_LENGTH))
 		return callbacks.ifError("invalid asset in private payment");
@@ -75,12 +75,12 @@ function validatePrivatePayment(conn, objPrivateElement, objPrevPrivateElement, 
 	var input = payload.inputs[0];
 	if (!ValidationUtils.isNonemptyObject(input))
 		return callbacks.ifError("no inputs[0]");
-	
+
 	profiler.start();
 	validation.initPrivatePaymentValidationState(
-		conn, objPrivateElement.unit, objPrivateElement.message_index, payload, callbacks.ifError, 
+		conn, objPrivateElement.unit, objPrivateElement.message_index, payload, callbacks.ifError,
 		function(bStable, objPartialUnit, objValidationState){
-		
+
 			profiler.stop('initPrivatePaymentValidationState');
 			var arrFuncs = [];
 			var spend_proof;
@@ -141,7 +141,7 @@ function validatePrivatePayment(conn, objPrivateElement, objPrevPrivateElement, 
 			}
 			else
 				return callbacks.ifError("neither transfer nor issue in private input");
-			
+
 			if (!objPartialUnit.authors.some(function(author){ return (author.address === input_address); }))
 				return callbacks.ifError("input address not found among unit authors");
 
@@ -157,7 +157,7 @@ function validatePrivatePayment(conn, objPrivateElement, objPrevPrivateElement, 
 				validation.validatePayment(conn, partially_revealed_payload, objPrivateElement.message_index, objPartialUnit, objValidationState, cb);
 			});
 			async.series(arrFuncs, function(err){
-			//	profiler.stop('validatePayment');
+				//	profiler.stop('validatePayment');
 				err ? callbacks.ifError(err) : callbacks.ifOk(bStable, input_address);
 			});
 		}
@@ -189,7 +189,7 @@ function parsePrivatePaymentChain(conn, arrPrivateElements, callbacks){
 				return cb("private element has a different asset");
 			if (objPrivateElement.payload.denomination !== denomination)
 				return cb("private element has a different denomination");
-			var prevElement = null; 
+			var prevElement = null;
 			if (i+1 < arrPrivateElements.length){ // excluding issue transaction
 				var prevElement = arrPrivateElements[i+1];
 				if (prevElement.unit !== objPrivateElement.payload.inputs[0].unit)
@@ -233,19 +233,19 @@ function validateAndSavePrivatePaymentChain(conn, arrPrivateElements, callbacks)
 				var input = payload.inputs[0];
 				var is_unique = objPrivateElement.bStable ? 1 : null; // unstable still have chances to become nonserial therefore nonunique
 				if (!input.type) // transfer
-					conn.addQuery(arrQueries, 
+					conn.addQuery(arrQueries,
 						"INSERT "+db.getIgnore()+" INTO inputs \n\
 						(unit, message_index, input_index, src_unit, src_message_index, src_output_index, asset, denomination, address, type, is_unique) \n\
-						VALUES (?,?,?,?,?,?,?,?,?,'transfer',?)", 
-						[objPrivateElement.unit, objPrivateElement.message_index, 0, input.unit, input.message_index, input.output_index, 
-						payload.asset, payload.denomination, input_address, is_unique]);
+						VALUES (?,?,?,?,?,?,?,?,?,'transfer',?)",
+						[objPrivateElement.unit, objPrivateElement.message_index, 0, input.unit, input.message_index, input.output_index,
+							payload.asset, payload.denomination, input_address, is_unique]);
 				else if (input.type === 'issue')
-					conn.addQuery(arrQueries, 
+					conn.addQuery(arrQueries,
 						"INSERT "+db.getIgnore()+" INTO inputs \n\
 						(unit, message_index, input_index, serial_number, amount, asset, denomination, address, type, is_unique) \n\
-						VALUES (?,?,?,?,?,?,?,?,'issue',?)", 
-						[objPrivateElement.unit, objPrivateElement.message_index, 0, input.serial_number, input.amount, 
-						payload.asset, payload.denomination, input_address, is_unique]);
+						VALUES (?,?,?,?,?,?,?,?,'issue',?)",
+						[objPrivateElement.unit, objPrivateElement.message_index, 0, input.serial_number, input.amount,
+							payload.asset, payload.denomination, input_address, is_unique]);
 				else
 					throw Error("neither transfer nor issue after validation");
 				var is_serial = objPrivateElement.bStable ? 1 : null; // initPrivatePaymentValidationState already checks for non-serial
@@ -253,12 +253,12 @@ function validateAndSavePrivatePaymentChain(conn, arrPrivateElements, callbacks)
 				for (var output_index=0; output_index<outputs.length; output_index++){
 					var output = outputs[output_index];
 					console.log("inserting output "+JSON.stringify(output));
-					conn.addQuery(arrQueries, 
+					conn.addQuery(arrQueries,
 						"INSERT "+db.getIgnore()+" INTO outputs \n\
 						(unit, message_index, output_index, amount, output_hash, asset, denomination) \n\
 						VALUES (?,?,?,?,?,?,?)",
-						[objPrivateElement.unit, objPrivateElement.message_index, output_index, 
-						output.amount, output.output_hash, payload.asset, payload.denomination]);
+						[objPrivateElement.unit, objPrivateElement.message_index, output_index,
+							output.amount, output.output_hash, payload.asset, payload.denomination]);
 					var fields = "is_serial=?";
 					var params = [is_serial];
 					if (output_index === objPrivateElement.output_index){
@@ -270,7 +270,7 @@ function validateAndSavePrivatePaymentChain(conn, arrPrivateElements, callbacks)
 					conn.addQuery(arrQueries, "UPDATE outputs SET "+fields+" WHERE unit=? AND message_index=? AND output_index=? AND is_spent=0", params);
 				}
 			}
-		//	console.log("queries: "+JSON.stringify(arrQueries));
+			//	console.log("queries: "+JSON.stringify(arrQueries));
 			async.series(arrQueries, function(){
 				profiler.stop('save');
 				callbacks.ifOk();
@@ -282,25 +282,25 @@ function validateAndSavePrivatePaymentChain(conn, arrPrivateElements, callbacks)
 
 // must be executed within transaction
 function updateIndivisibleOutputsThatWereReceivedUnstable(conn, onDone){
-	
+
 	function updateOutputProps(unit, is_serial, onUpdated){
 		// may update several outputs
 		conn.query(
-			"UPDATE outputs SET is_serial=? WHERE unit=?", 
+			"UPDATE outputs SET is_serial=? WHERE unit=?",
 			[is_serial, unit],
 			function(){
 				is_serial ? updateInputUniqueness(unit, onUpdated) : onUpdated();
 			}
 		);
 	}
-	
+
 	function updateInputUniqueness(unit, onUpdated){
 		// may update several inputs
 		conn.query("UPDATE inputs SET is_unique=1 WHERE unit=?", [unit], function(){
 			onUpdated();
 		});
 	}
-	
+
 	console.log("updatePrivateIndivisibleOutputsThatWereReceivedUnstable starting");
 	conn.query(
 		"SELECT unit, message_index, sequence FROM outputs "+(conf.storage === 'sqlite' ? "INDEXED BY outputsIsSerial" : "")+" \n\
@@ -312,17 +312,17 @@ function updateIndivisibleOutputsThatWereReceivedUnstable(conn, onDone){
 			async.eachSeries(
 				rows,
 				function(row, cb){
-					
+
 					function updateFinalOutputProps(is_serial){
 						updateOutputProps(row.unit, is_serial, cb);
 					}
-					
+
 					function goUp(unit, message_index){
 						// we must have exactly 1 input per message
 						conn.query(
 							"SELECT src_unit, src_message_index, src_output_index \n\
 							FROM inputs \n\
-							WHERE unit=? AND message_index=?", 
+							WHERE unit=? AND message_index=?",
 							[unit, message_index],
 							function(src_rows){
 								if (src_rows.length === 0)
@@ -334,7 +334,7 @@ function updateIndivisibleOutputsThatWereReceivedUnstable(conn, onDone){
 									return cb();
 								conn.query(
 									"SELECT sequence, is_stable, is_serial FROM outputs JOIN units USING(unit) \n\
-									WHERE unit=? AND message_index=? AND output_index=?", 
+									WHERE unit=? AND message_index=? AND output_index=?",
 									[src_row.src_unit, src_row.src_message_index, src_row.src_output_index],
 									function(prev_rows){
 										if (prev_rows.length === 0)
@@ -359,7 +359,7 @@ function updateIndivisibleOutputsThatWereReceivedUnstable(conn, onDone){
 							}
 						);
 					}
-					
+
 					var is_serial = (row.sequence === 'good') ? 1 : 0;
 					updateOutputProps(row.unit, is_serial, function(){
 						goUp(row.unit, row.message_index);
@@ -383,7 +383,7 @@ function pickIndivisibleCoinsForAmount(
 		var arrOutputIds = [];
 		var accumulated_amount = 0;
 		var asset = objAsset.asset;
-		
+
 		if (!(typeof last_ball_mci === 'number' && last_ball_mci >= 0))
 			throw Error("invalid last_ball_mci: "+last_ball_mci);
 		var confirmation_condition;
@@ -399,7 +399,7 @@ function pickIndivisibleCoinsForAmount(
 			) )';
 		else
 			throw Error("invalid spend_unconfirmed="+spend_unconfirmed);
-		
+
 		function createOutputs(amount_to_use, change_amount){
 			var output = {
 				address: to_address,
@@ -420,7 +420,7 @@ function pickIndivisibleCoinsForAmount(
 			}
 			return outputs;
 		}
-		
+
 		function pickNextCoin(remaining_amount){
 			console.log("looking for output for "+remaining_amount);
 			if (remaining_amount <= 0)
@@ -431,9 +431,9 @@ function pickIndivisibleCoinsForAmount(
 				WHERE asset=? AND address IN(?) AND is_spent=0 AND sequence='good' \n\
 					"+confirmation_condition+" AND denomination<=? AND output_id NOT IN(?) \n\
 				ORDER BY denomination DESC, (amount>=?) DESC, ABS(amount-?) LIMIT 1",
-				[asset, arrAddresses, 
-				remaining_amount, (arrOutputIds.length > 0) ? arrOutputIds : -1, 
-				remaining_amount + tolerance_plus, remaining_amount],
+				[asset, arrAddresses,
+					remaining_amount, (arrOutputIds.length > 0) ? arrOutputIds : -1,
+					remaining_amount + tolerance_plus, remaining_amount],
 				function(rows){
 					if (rows.length === 0)
 						return issueNextCoinIfAllowed(remaining_amount);
@@ -489,13 +489,13 @@ function pickIndivisibleCoinsForAmount(
 				}
 			);
 		}
-		
+
 		function issueNextCoinIfAllowed(remaining_amount){
-			return (!objAsset.issued_by_definer_only || arrAddresses.indexOf(objAsset.definer_address) >= 0) 
-				? issueNextCoin(remaining_amount) 
+			return (!objAsset.issued_by_definer_only || arrAddresses.indexOf(objAsset.definer_address) >= 0)
+				? issueNextCoin(remaining_amount)
 				: onDone(NOT_ENOUGH_FUNDS_ERROR_MESSAGE);
 		}
-		
+
 		function issueNextCoin(remaining_amount){
 			console.log("issuing a new coin");
 			if (remaining_amount <= 0)
@@ -505,8 +505,8 @@ function pickIndivisibleCoinsForAmount(
 			conn.query(
 				"SELECT denomination, count_coins, max_issued_serial_number FROM asset_denominations \n\
 				WHERE asset=? AND "+can_issue_condition+" AND denomination<=? \n\
-				ORDER BY denomination DESC LIMIT 1", 
-				[asset, remaining_amount+tolerance_plus], 
+				ORDER BY denomination DESC LIMIT 1",
+				[asset, remaining_amount+tolerance_plus],
 				function(rows){
 					if (rows.length === 0)
 						return onDone(NOT_ENOUGH_FUNDS_ERROR_MESSAGE);
@@ -518,8 +518,8 @@ function pickIndivisibleCoinsForAmount(
 					var count_coins_to_issue = row.count_coins || Math.floor((remaining_amount+tolerance_plus)/denomination);
 					var issue_amount = count_coins_to_issue * denomination;
 					conn.query(
-						"UPDATE asset_denominations SET max_issued_serial_number=max_issued_serial_number+1 WHERE denomination=? AND asset=?", 
-						[denomination, asset], 
+						"UPDATE asset_denominations SET max_issued_serial_number=max_issued_serial_number+1 WHERE denomination=? AND asset=?",
+						[denomination, asset],
 						function(){
 							var input = {
 								type: 'issue',
@@ -569,7 +569,7 @@ function pickIndivisibleCoinsForAmount(
 				}
 			);
 		}
-				
+
 		var arrSpendableAddresses = arrAddresses.concat(); // cloning
 		if (objAsset && objAsset.auto_destroy){
 			var i = arrAddresses.indexOf(objAsset.definer_address);
@@ -619,12 +619,12 @@ function buildPrivateElementsChain(conn, unit, message_index, output_index, payl
 			blinding: output.blinding
 		}
 	}];
-	
+
 	function readPayloadAndGoUp(_unit, _message_index, _output_index){
 		conn.query(
 			"SELECT src_unit, src_message_index, src_output_index, serial_number, denomination, amount, address, asset, \n\
 				(SELECT COUNT(*) FROM unit_authors WHERE unit=?) AS count_authors \n\
-			FROM inputs WHERE unit=? AND message_index=?", 
+			FROM inputs WHERE unit=? AND message_index=?",
 			[_unit, _unit, _message_index],
 			function(in_rows){
 				if (in_rows.length === 0)
@@ -653,8 +653,8 @@ function buildPrivateElementsChain(conn, unit, message_index, output_index, payl
 				}
 				conn.query(
 					"SELECT address, blinding, output_hash, amount, output_index, asset, denomination FROM outputs \n\
-					WHERE unit=? AND message_index=? ORDER BY output_index", 
-					[_unit, _message_index], 
+					WHERE unit=? AND message_index=? ORDER BY output_index",
+					[_unit, _message_index],
 					function(out_rows){
 						if (out_rows.length === 0)
 							throw Error("blackbyte output not found");
@@ -688,7 +688,7 @@ function buildPrivateElementsChain(conn, unit, message_index, output_index, payl
 							output: output
 						};
 						arrPrivateElements.push(objPrivateElement);
-						(input.type === 'issue') 
+						(input.type === 'issue')
 							? handlePrivateElements(arrPrivateElements)
 							: readPayloadAndGoUp(input.unit, input.message_index, input.output_index);
 					}
@@ -696,9 +696,9 @@ function buildPrivateElementsChain(conn, unit, message_index, output_index, payl
 			}
 		);
 	}
-	
+
 	var input = payload.inputs[0];
-	(input.type === 'issue') 
+	(input.type === 'issue')
 		? handlePrivateElements(arrPrivateElements)
 		: readPayloadAndGoUp(input.unit, input.message_index, input.output_index);
 }
@@ -720,7 +720,7 @@ function composeIndivisibleAssetPaymentJoint(params){
 		minimal: params.minimal,
 		outputs: arrBaseOutputs,
 		spend_unconfirmed: params.spend_unconfirmed || 'own',
-		
+
 		// function that creates additional messages to be added to the joint
 		retrieveMessages: function createAdditionalMessages(conn, last_ball_mci, bMultiAuthored, arrPayingAddresses, onDone){
 			var arrAssetPayingAddresses = _.intersection(arrPayingAddresses, params.paying_addresses);
@@ -739,14 +739,14 @@ function composeIndivisibleAssetPaymentJoint(params){
 				var target_amount = params.to_address ? params.amount : params.asset_outputs[0].amount;
 				var to_address = params.to_address ? params.to_address : params.asset_outputs[0].address;
 				pickIndivisibleCoinsForAmount(
-					conn, objAsset, arrAssetPayingAddresses, last_ball_mci, 
+					conn, objAsset, arrAssetPayingAddresses, last_ball_mci,
 					to_address, params.change_address,
-					target_amount, params.tolerance_plus || 0, params.tolerance_minus || 0, 
+					target_amount, params.tolerance_plus || 0, params.tolerance_minus || 0,
 					bMultiAuthored, params.spend_unconfirmed || 'own',
 					function(err, arrPayloadsWithProofs){
 						if (!arrPayloadsWithProofs)
 							return onDone({
-								error_code: "NOT_ENOUGH_FUNDS", 
+								error_code: "NOT_ENOUGH_FUNDS",
 								error: err
 							});
 						var arrMessages = [];
@@ -754,6 +754,7 @@ function composeIndivisibleAssetPaymentJoint(params){
 						for (var i=0; i<arrPayloadsWithProofs.length; i++){
 							var payload = arrPayloadsWithProofs[i].payload;
 							var payload_hash;// = objectHash.getBase64Hash(payload);
+							var bJsonBased = (last_ball_mci >= constants.timestampUpgradeMci);
 							if (objAsset.is_private){
 								payload.outputs.forEach(function(o){
 									o.output_hash = objectHash.getBase64Hash({address: o.address, blinding: o.blinding});
@@ -763,10 +764,10 @@ function composeIndivisibleAssetPaymentJoint(params){
 									delete o.address;
 									delete o.blinding;
 								});
-								payload_hash = objectHash.getBase64Hash(hidden_payload);
+								payload_hash = objectHash.getBase64Hash(hidden_payload, bJsonBased);
 							}
 							else
-								payload_hash = objectHash.getBase64Hash(payload);
+								payload_hash = objectHash.getBase64Hash(payload, bJsonBased);
 							var objMessage = {
 								app: "payment",
 								payload_location: objAsset.is_private ? "none" : "inline",
@@ -788,9 +789,9 @@ function composeIndivisibleAssetPaymentJoint(params){
 				);
 			});
 		},
-		
-		signer: params.signer, 
-		
+
+		signer: params.signer,
+
 		callbacks: {
 			ifError: params.callbacks.ifError,
 			ifNotEnoughFunds: params.callbacks.ifNotEnoughFunds,
@@ -813,7 +814,7 @@ function getSavingCallbacks(to_address, callbacks){
 				ifUnitError: function(err){
 					composer_unlock();
 					callbacks.ifError("Validation error: "+err);
-				//	throw Error("unexpected validation error: "+err);
+					//	throw Error("unexpected validation error: "+err);
 				},
 				ifJointError: function(err){
 					throw Error("unexpected validation joint error: "+err);
@@ -839,7 +840,7 @@ function getSavingCallbacks(to_address, callbacks){
 					var arrCosignerChains = bPrivate ? [] : null; // chains for all output addresses, including change, to be shared with cosigners (if any)
 					var preCommitCallback = null;
 					var bPreCommitCallbackFailed = false;
-					
+
 					if (bPrivate){
 						preCommitCallback = function(conn, cb){
 							async.eachSeries(
@@ -854,7 +855,7 @@ function getSavingCallbacks(to_address, callbacks){
 										function(output, output_index, cb3){
 											// we have only heads of the chains so far. Now add the tails.
 											buildPrivateElementsChain(
-												conn, unit, message_index, output_index, payload, 
+												conn, unit, message_index, output_index, payload,
 												function(arrPrivateElements){
 													validateAndSavePrivatePaymentChain(conn, _.cloneDeep(arrPrivateElements), {
 														ifError: function(err){
@@ -886,14 +887,14 @@ function getSavingCallbacks(to_address, callbacks){
 											}
 											return cb(err);
 										}
-									else 
+									else
 										var onSuccessfulPrecommit = function(err){
 											if (err) {
 												bPreCommitCallbackFailed = true;
 												return cb(err);
 											}
 											composer.postJointToLightVendorIfNecessaryAndSave(
-												objJoint, 
+												objJoint,
 												function onLightError(err){ // light only
 													console.log("failed to post indivisible payment "+unit);
 													bPreCommitCallbackFailed = true;
@@ -917,10 +918,10 @@ function getSavingCallbacks(to_address, callbacks){
 							}
 						}
 					}
-					
+
 					var saveAndUnlock = function(){
 						writer.saveJoint(
-							objJoint, objValidationState, 
+							objJoint, objValidationState,
 							preCommitCallback,
 							function onDone(err){
 								console.log("saved unit "+unit+", err="+err);
@@ -933,14 +934,14 @@ function getSavingCallbacks(to_address, callbacks){
 							}
 						);
 					};
-					
-					// if light and private, we'll post the joint later, in precommit 
-					// (saving private payloads can take quite some time and the app can be killed before saving them to its local database, 
+
+					// if light and private, we'll post the joint later, in precommit
+					// (saving private payloads can take quite some time and the app can be killed before saving them to its local database,
 					// we should not broadcast the joint earlier)
 					if (bPrivate || !conf.bLight)
 						return saveAndUnlock();
 					composer.postJointToLightVendorIfNecessaryAndSave(
-						objJoint, 
+						objJoint,
 						function onLightError(err){ // light only
 							console.log("failed to post indivisible payment "+unit);
 							validation_unlock();
@@ -959,8 +960,9 @@ function restorePrivateChains(asset, unit, to_address, handleChains){
 	var arrRecipientChains = [];
 	var arrCosignerChains = [];
 	db.query(
-		"SELECT DISTINCT message_index, denomination, payload_hash FROM outputs JOIN messages USING(unit, message_index) WHERE unit=? AND asset=?", 
-		[unit, asset], 
+		"SELECT DISTINCT message_index, denomination, payload_hash, version \n\
+		FROM outputs JOIN messages USING(unit, message_index) CROSS JOIN units USING(unit) WHERE unit=? AND asset=?",
+		[unit, asset],
 		function(rows){
 			async.eachSeries(
 				rows,
@@ -968,7 +970,7 @@ function restorePrivateChains(asset, unit, to_address, handleChains){
 					var payload = {asset: asset, denomination: row.denomination};
 					var message_index = row.message_index;
 					db.query(
-						"SELECT src_unit, src_message_index, src_output_index, denomination, asset FROM inputs WHERE unit=? AND message_index=?", 
+						"SELECT src_unit, src_message_index, src_output_index, denomination, asset FROM inputs WHERE unit=? AND message_index=?",
 						[unit, message_index],
 						function(input_rows){
 							if (input_rows.length !== 1)
@@ -988,7 +990,7 @@ function restorePrivateChains(asset, unit, to_address, handleChains){
 							payload.inputs = [input];
 							db.query(
 								"SELECT address, amount, blinding, output_hash FROM outputs \n\
-								WHERE unit=? AND asset=? AND message_index=? ORDER BY output_index", 
+								WHERE unit=? AND asset=? AND message_index=? ORDER BY output_index",
 								[unit, asset, message_index],
 								function(outputs){
 									if (outputs.length === 0)
@@ -1001,7 +1003,7 @@ function restorePrivateChains(asset, unit, to_address, handleChains){
 										delete o.address;
 										delete o.blinding;
 									});
-									var payload_hash = objectHash.getBase64Hash(hidden_payload);
+									var payload_hash = objectHash.getBase64Hash(hidden_payload, row.version !== constants.versionWithoutTimestamp);
 									if (payload_hash !== row.payload_hash)
 										throw Error("wrong payload hash");
 									async.forEachOfSeries(
@@ -1011,7 +1013,7 @@ function restorePrivateChains(asset, unit, to_address, handleChains){
 												return cb3();
 											// we have only heads of the chains so far. Now add the tails.
 											buildPrivateElementsChain(
-												db, unit, message_index, output_index, payload, 
+												db, unit, message_index, output_index, payload,
 												function(arrPrivateElements){
 													if (output.address === to_address)
 														arrRecipientChains.push(arrPrivateElements);
@@ -1078,13 +1080,13 @@ var TYPICAL_FEE = 3000;
 function readFundedAddresses(asset, amount, arrAvailablePayingAddresses, arrAvailableFeePayingAddresses, spend_unconfirmed, handleFundedAddresses){
 	readAddressesFundedInAsset(asset, amount, spend_unconfirmed, arrAvailablePayingAddresses, function(arrAddressesFundedInAsset){
 		// add other addresses to pay for commissions (in case arrAddressesFundedInAsset don't have enough bytes to pay commissions)
-	//	var arrOtherAddresses = _.difference(arrAvailablePayingAddresses, arrAddressesFundedInAsset);
-	//	if (arrOtherAddresses.length === 0)
-	//		return handleFundedAddresses(arrAddressesFundedInAsset);
-		composer.readSortedFundedAddresses(null, arrAvailableFeePayingAddresses, TYPICAL_FEE, spend_unconfirmed, function(arrFundedFeePayingAddresses){
-		//	if (arrFundedOtherAddresses.length === 0)
+		//	var arrOtherAddresses = _.difference(arrAvailablePayingAddresses, arrAddressesFundedInAsset);
+		//	if (arrOtherAddresses.length === 0)
 		//		return handleFundedAddresses(arrAddressesFundedInAsset);
-		//	handleFundedAddresses(arrAddressesFundedInAsset.concat(arrFundedOtherAddresses));
+		composer.readSortedFundedAddresses(null, arrAvailableFeePayingAddresses, TYPICAL_FEE, spend_unconfirmed, function(arrFundedFeePayingAddresses){
+			//	if (arrFundedOtherAddresses.length === 0)
+			//		return handleFundedAddresses(arrAddressesFundedInAsset);
+			//	handleFundedAddresses(arrAddressesFundedInAsset.concat(arrFundedOtherAddresses));
 			if (arrFundedFeePayingAddresses.length === 0)
 				throw new Error("no funded fee paying addresses out of "+arrAvailableFeePayingAddresses.join(', '));
 			handleFundedAddresses(arrAddressesFundedInAsset, arrFundedFeePayingAddresses);

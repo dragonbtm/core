@@ -30,7 +30,7 @@ function validateAndSaveDivisiblePrivatePayment(conn, objPrivateElement, callbac
 			var arrQueries = [];
 			for (var j=0; j<payload.outputs.length; j++){
 				var output = payload.outputs[j];
-				conn.addQuery(arrQueries, 
+				conn.addQuery(arrQueries,
 					"INSERT INTO outputs (unit, message_index, output_index, address, amount, blinding, asset) VALUES (?,?,?,?,?,?,?)",
 					[unit, message_index, j, output.address, parseInt(output.amount), output.blinding, payload.asset]
 				);
@@ -58,12 +58,12 @@ function validateAndSaveDivisiblePrivatePayment(conn, objPrivateElement, callbac
 						src_unit, src_message_index, src_output_index, \
 						serial_number, amount, \n\
 						asset, is_unique, address) VALUES(?,?,?,?,?,?,?,?,?,?,?,"+(address_sql || conn.escape(address))+")",
-					[unit, message_index, j, type, 
-					 src_unit, src_message_index, src_output_index, 
-					 input.serial_number, input.amount, 
-					 payload.asset, is_unique]);
+					[unit, message_index, j, type,
+						src_unit, src_message_index, src_output_index,
+						input.serial_number, input.amount,
+						payload.asset, is_unique]);
 				if (type === "transfer"){
-					conn.addQuery(arrQueries, 
+					conn.addQuery(arrQueries,
 						"UPDATE outputs SET is_spent=1 WHERE unit=? AND message_index=? AND output_index=?",
 						[src_unit, src_message_index, src_output_index]);
 				}
@@ -75,7 +75,7 @@ function validateAndSaveDivisiblePrivatePayment(conn, objPrivateElement, callbac
 
 
 function validateDivisiblePrivatePayment(conn, objPrivateElement, callbacks){
-	
+
 	var unit = objPrivateElement.unit;
 	var message_index = objPrivateElement.message_index;
 	var payload = objPrivateElement.payload;
@@ -84,11 +84,11 @@ function validateDivisiblePrivatePayment(conn, objPrivateElement, callbacks){
 		return callbacks.ifError("invalid asset in private divisible payment");
 	if (!ValidationUtils.isNonemptyArray(payload.inputs))
 		return callbacks.ifError("no inputs");
-	
+
 	validation.initPrivatePaymentValidationState(
-		conn, unit, message_index, payload, callbacks.ifError, 
+		conn, unit, message_index, payload, callbacks.ifError,
 		function(bStable, objPartialUnit, objValidationState){
-		
+
 			var arrAuthorAddresses = objPartialUnit.authors.map(function(author) { return author.address; } );
 
 			function validateSpendProofs(sp_cb){
@@ -138,7 +138,7 @@ function validateDivisiblePrivatePayment(conn, objPrivateElement, callbacks){
 							return sp_cb(err);
 						//arrSpendProofs.sort(function(a,b){ return a.spend_proof.localeCompare(b.spend_proof); });
 						conn.query(
-							"SELECT address, spend_proof FROM spend_proofs WHERE unit=? AND message_index=? ORDER BY spend_proof", 
+							"SELECT address, spend_proof FROM spend_proofs WHERE unit=? AND message_index=? ORDER BY spend_proof",
 							[unit, message_index],
 							function(rows){
 								if (rows.length !== arrSpendProofs.length)
@@ -208,9 +208,9 @@ function composeDivisibleAssetPaymentJoint(params){
 					return onDone("the asset must be cosigned by definer");
 				if (!conf.bLight && objAsset.spender_attested && objAsset.arrAttestedAddresses.length === 0)
 					return onDone("none of the authors is attested");
-				
-				var target_amount = params.to_address 
-					? params.amount 
+
+				var target_amount = params.to_address
+					? params.amount
 					: params.asset_outputs.reduce(function(accumulator, output){ return accumulator + output.amount; }, 0);
 				inputs.pickDivisibleCoinsForAmount(
 					conn, objAsset, arrAssetPayingAddresses, last_ball_mci, target_amount, bMultiAuthored, params.spend_unconfirmed || 'own',
@@ -235,7 +235,7 @@ function composeDivisibleAssetPaymentJoint(params){
 						var objMessage = {
 							app: "payment",
 							payload_location: objAsset.is_private ? "none" : "inline",
-							payload_hash: objectHash.getBase64Hash(payload)
+							payload_hash: objectHash.getBase64Hash(payload, last_ball_mci >= constants.timestampUpgradeMci)
 						};
 						var assocPrivatePayloads;
 						if (objAsset.is_private){
@@ -250,9 +250,9 @@ function composeDivisibleAssetPaymentJoint(params){
 				);
 			});
 		},
-		
-		signer: params.signer, 
-		
+
+		signer: params.signer,
+
 		callbacks: {
 			ifError: params.callbacks.ifError,
 			ifNotEnoughFunds: params.callbacks.ifNotEnoughFunds,
@@ -276,7 +276,7 @@ function getSavingCallbacks(callbacks){
 				ifUnitError: function(err){
 					composer_unlock();
 					callbacks.ifError("Validation error: "+err);
-				//	throw Error("unexpected validation error: "+err);
+					//	throw Error("unexpected validation error: "+err);
 				},
 				ifJointError: function(err){
 					throw Error("unexpected validation joint error: "+err);
@@ -300,10 +300,10 @@ function getSavingCallbacks(callbacks){
 					var bPrivate = !!private_payload;
 					var objPrivateElement;
 					var preCommitCallback = null;
-					
+
 					if (bPrivate){
 						preCommitCallback = function(conn, cb){
-							var payload_hash = objectHash.getBase64Hash(private_payload);
+							var payload_hash = objectHash.getBase64Hash(private_payload, objUnit.version !== constants.versionWithoutTimestamp);
 							var message_index = composer.getMessageIndexByPayloadHash(objUnit, payload_hash);
 							objPrivateElement = {
 								unit: unit,
@@ -326,9 +326,9 @@ function getSavingCallbacks(callbacks){
 							}
 						}
 					}
-					
+
 					composer.postJointToLightVendorIfNecessaryAndSave(
-						objJoint, 
+						objJoint,
 						function onLightError(err){ // light only
 							console.log("failed to post divisible payment "+unit);
 							validation_unlock();
@@ -337,7 +337,7 @@ function getSavingCallbacks(callbacks){
 						},
 						function save(){
 							writer.saveJoint(
-								objJoint, objValidationState, 
+								objJoint, objValidationState,
 								preCommitCallback,
 								function onDone(err){
 									console.log("saved unit "+unit+", err="+err, objPrivateElement);
@@ -366,14 +366,14 @@ var TYPICAL_FEE = 1000;
 
 // {asset: asset, available_paying_addresses: arrAvailablePayingAddresses, available_fee_paying_addresses: arrAvailableFeePayingAddresses, change_address: change_address, to_address: to_address, amount: amount, signer: signer, callbacks: callbacks}
 function composeMinimalDivisibleAssetPaymentJoint(params){
-		
+
 	if (!ValidationUtils.isNonemptyArray(params.available_paying_addresses))
 		throw Error('no available_paying_addresses');
 	if (!ValidationUtils.isNonemptyArray(params.available_fee_paying_addresses))
 		throw Error('no available_fee_paying_addresses');
 	composer.readSortedFundedAddresses(params.asset, params.available_paying_addresses, params.amount, params.spend_unconfirmed || 'own', function(arrFundedPayingAddresses){
 		if (arrFundedPayingAddresses.length === 0){
-			 // special case for issuing uncapped asset.  If it is not issuing, not-enough-funds will pop anyway
+			// special case for issuing uncapped asset.  If it is not issuing, not-enough-funds will pop anyway
 			if (params.available_paying_addresses.length === 1)
 				arrFundedPayingAddresses = params.available_paying_addresses.concat();
 			else

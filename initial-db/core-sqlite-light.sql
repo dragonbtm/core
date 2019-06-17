@@ -5,6 +5,7 @@ CREATE TABLE units (
 	alt VARCHAR(3) NOT NULL DEFAULT '1',
 	witness_list_unit CHAR(44) NULL,
 	last_ball_unit CHAR(44) NULL,
+	timestamp INT NOT NULL DEFAULT 0,
 	content_hash CHAR(44) NULL,
 	headers_commission INT NOT NULL,
 	payload_commission INT NOT NULL,
@@ -194,7 +195,7 @@ CREATE TABLE polls (
 CREATE TABLE poll_choices (
 	unit CHAR(44) NOT NULL,
 	choice_index TINYINT NOT NULL,
-	choice VARCHAR(32) NOT NULL,
+	choice VARCHAR(64) NOT NULL,
 	PRIMARY KEY (unit, choice_index),
 	UNIQUE  (unit, choice),
 	FOREIGN KEY (unit) REFERENCES polls(unit)
@@ -204,7 +205,7 @@ CREATE TABLE votes (
 	unit CHAR(44) NOT NULL,
 	message_index TINYINT NOT NULL,
 	poll_unit CHAR(44) NOT NULL,
-	choice VARCHAR(32) NOT NULL,
+	choice VARCHAR(64) NOT NULL,
 	PRIMARY KEY (unit, message_index),
 	UNIQUE  (unit, choice),
 	FOREIGN KEY (unit) REFERENCES units(unit)
@@ -254,7 +255,7 @@ CREATE TABLE asset_attestors (
 	message_index TINYINT NOT NULL,
 	asset CHAR(44) NOT NULL, -- in the initial attestor list: same as unit 
 	attestor_address CHAR(32) NOT NULL,
-	PRIMARY KEY (unit, message_index),
+	PRIMARY KEY (unit, message_index, attestor_address),
 	UNIQUE (asset, attestor_address, unit),
 	FOREIGN KEY (unit) REFERENCES units(unit)
 );
@@ -542,6 +543,8 @@ CREATE TABLE correspondent_devices (
 	hub VARCHAR(100) NOT NULL, -- domain name of the hub this address is subscribed to
 	is_confirmed TINYINT NOT NULL DEFAULT 0,
 	is_indirect TINYINT NOT NULL DEFAULT 0,
+	is_blackhole TINYINT NOT NULL DEFAULT 0,
+	push_enabled TINYINT NOT NULL DEFAULT 1,
 	creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -616,6 +619,7 @@ CREATE TABLE shared_address_signing_paths (
 	-- own address is not present in correspondents
 --    FOREIGN KEY byDeviceAddress(device_address) REFERENCES correspondent_devices(device_address)
 );
+CREATE INDEX sharedAddressSigningPathsByDeviceAddress ON shared_address_signing_paths(device_address);
 
 
 CREATE TABLE outbox (
@@ -712,6 +716,7 @@ CREATE TABLE private_profiles (
 	creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY (unit) REFERENCES units(unit)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS unqPayloadHash ON private_profiles(payload_hash);
 
 CREATE TABLE private_profile_fields (
 	private_profile_id INTEGER NOT NULL ,
@@ -748,5 +753,40 @@ CREATE TABLE original_addresses (
 	FOREIGN KEY (unit) REFERENCES units(unit)
 );
 
+CREATE TABLE IF NOT EXISTS peer_addresses (
+	address CHAR(32) NOT NULL,
+	signing_paths VARCHAR(255) NULL, -- array of local signing paths (JSON)
+	device_address CHAR(33) NOT NULL, -- where this signing key lives or is reachable through
+	definition TEXT NULL,
+	creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	PRIMARY KEY (address),
+	FOREIGN KEY (device_address) REFERENCES correspondent_devices(device_address)
+);
 
-PRAGMA user_version=21;
+CREATE TABLE IF NOT EXISTS prosaic_contracts (
+	hash CHAR(44) NOT NULL PRIMARY KEY,
+	peer_address CHAR(32) NOT NULL,
+	peer_device_address CHAR(33) NOT NULL,
+	my_address  CHAR(32) NOT NULL,
+	is_incoming TINYINT NOT NULL,
+	creation_date TIMESTAMP NOT NULL,
+	ttl REAL NOT NULL DEFAULT 168, -- 168 hours = 24 * 7 = 1 week
+	status TEXT CHECK (status IN('pending', 'revoked', 'accepted', 'declined')) NOT NULL DEFAULT 'active',
+	title VARCHAR(1000) NOT NULL,
+	`text` TEXT NOT NULL,
+	shared_address CHAR(32),
+	unit CHAR(44),
+	cosigners VARCHAR(1500),
+	FOREIGN KEY (my_address) REFERENCES my_addresses(address)
+);
+
+-- hub table
+CREATE TABLE correspondent_settings (
+	device_address CHAR(33) NOT NULL,
+	correspondent_address CHAR(33) NOT NULL,
+	push_enabled TINYINT NOT NULL,
+	creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	PRIMARY KEY (device_address, correspondent_address)
+);
+
+PRAGMA user_version=28;

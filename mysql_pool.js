@@ -9,7 +9,7 @@ module.exports = function(connection_or_pool){
 	safe_connection.original_query = safe_connection.query;
 	safe_connection.original_release = safe_connection.release;
 	safe_connection.original_escape = safe_connection.escape;
-	
+
 	// this is a hack to make all errors throw exception that would kill the program
 	safe_connection.query = function () {
 		var last_arg = arguments[arguments.length - 1];
@@ -21,7 +21,7 @@ module.exports = function(connection_or_pool){
 		var count_arguments_without_callback = bHasCallback ? (arguments.length-1) : arguments.length;
 		var new_args = [];
 		var q;
-		
+
 		for (var i=0; i<count_arguments_without_callback; i++) // except callback
 			new_args.push(arguments[i]);
 		if (!bHasCallback)
@@ -29,7 +29,7 @@ module.exports = function(connection_or_pool){
 				new_args.push(resolve);
 				safe_connection.query.apply(safe_connection, new_args);
 			});
-		
+
 		// add callback with error handling
 		new_args.push(function(err, results, fields){
 			if (err){
@@ -70,7 +70,7 @@ module.exports = function(connection_or_pool){
 	safe_connection.escape = function(str){
 		return connection_or_pool.original_escape(str);
 	};
-	
+
 	safe_connection.release = function(){
 		//console.log("releasing connection");
 		connection_or_pool.original_release();
@@ -103,15 +103,15 @@ module.exports = function(connection_or_pool){
 			handleConnection(new_connection.original_query ? new_connection : module.exports(new_connection));
 		});
 	};
-	
+
 	safe_connection.getCountUsedConnections = function(){
 		return (safe_connection._allConnections.length - safe_connection._freeConnections.length);
 	};
-	
+
 	safe_connection.close = function(cb){
 		connection_or_pool.end(cb);
 	};
-	
+
 	safe_connection.addTime = function(interval){
 		return "NOW() + INTERVAL "+interval;
 	};

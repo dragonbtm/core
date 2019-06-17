@@ -21,7 +21,7 @@ function load(cb) {
 		if (err != null) {
 			return cb(err, null);
 		}
-		async.eachSeries(bots, 
+		async.eachSeries(bots,
 			function(bot, cb) {
 				setPairingStatus(bot, function(handled_bot){
 					bot.isPaired = handled_bot.isPaired;

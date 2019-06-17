@@ -11,7 +11,7 @@ var eventBus = require('./event_bus.js');
 var breadcrumbs = require('./breadcrumbs.js');
 
 var RECONNECT_TO_LIGHT_VENDOR_PERIOD = 60*1000;
-
+var firstHistoryReceived = false;
 
 function setLightVendorHost(light_vendor_host){
 	if (network.light_vendor_url)
@@ -122,7 +122,7 @@ function refreshLightClientHistory(){
 				}
 				ws.bLightVendor = true;
 				var interval = setInterval(function(){ // refresh UI periodically while we are processing history
-				//	eventBus.emit('maybe_new_transactions');
+					//	eventBus.emit('maybe_new_transactions');
 				}, 10*1000);
 				light.processHistory(response, objRequest.witnesses, {
 					ifError: function(err){
@@ -133,6 +133,7 @@ function refreshLightClientHistory(){
 					ifOk: function(bRefreshUI){
 						clearInterval(interval);
 						finish();
+						firstHistoryReceived = true;
 						if (bRefreshUI)
 							eventBus.emit('maybe_new_transactions');
 					}
@@ -173,6 +174,10 @@ if (conf.bLight){
 	});
 }
 
+function isFirstHistoryReceived(){
+	return firstHistoryReceived;
+}
+
 exports.setLightVendorHost = setLightVendorHost;
 exports.refreshLightClientHistory = refreshLightClientHistory;
-
+exports.isFirstHistoryReceived = isFirstHistoryReceived;

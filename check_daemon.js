@@ -30,21 +30,15 @@ function checkDaemonAndNotify(daemon_name){
 
 function checkDaemonAndRestart(daemon_name, start_command){
 	checkDaemon(daemon_name, function(bFound){
-		if (bFound) {
-			console.log("服務已經啓動~!")
+		if (bFound)
 			return;
-		}
-		child_process.exec("nvm use 5").unref();
+		notifyAdmin('daemon '+daemon_name+' is down, trying to restart '+start_command);
 		child_process.exec(start_command).unref();
-		notifyAdmin('daemon '+daemon_name+' is down, trying to restart '+start_command,function () {
-
-			process.exit();
-		});
-
+		process.exit();
 	});
 }
 
-function notifyAdmin(message,cb){
+function notifyAdmin(message){
 	write(message);
 	if (!conf.admin_email || !conf.from_email)
 		return write('cannot notify admin as admin_email or from_email are not defined');
@@ -53,14 +47,13 @@ function notifyAdmin(message,cb){
 		from: conf.from_email,
 		subject: message,
 		body: 'Check daemon:\n'+message
-	},cb);
+	});
 }
 
 function write(str){
 	console.log(Date().toString()+': '+str);
 }
 
-exports.notifyAdmin = notifyAdmin;
 exports.checkDaemon = checkDaemon;
 exports.checkDaemonAndNotify = checkDaemonAndNotify;
 exports.checkDaemonAndRestart = checkDaemonAndRestart;

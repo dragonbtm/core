@@ -6,7 +6,7 @@ var db = require('./db.js');
 function generateQueriesToArchiveJoint(conn, objJoint, reason, arrQueries, cb){
 	var func = (reason === 'uncovered') ? generateQueriesToRemoveJoint : generateQueriesToVoidJoint;
 	func(conn, objJoint.unit.unit, arrQueries, function(){
-		conn.addQuery(arrQueries, "INSERT "+conn.getIgnore()+" INTO archived_joints (unit, reason, json) VALUES (?,?,?)", 
+		conn.addQuery(arrQueries, "INSERT "+conn.getIgnore()+" INTO archived_joints (unit, reason, json) VALUES (?,?,?)",
 			[objJoint.unit.unit, reason, JSON.stringify(objJoint)]);
 		cb();
 	});
@@ -37,7 +37,7 @@ function generateQueriesToRemoveJoint(conn, unit, arrQueries, cb){
 		conn.addQuery(arrQueries, "DELETE FROM asset_attestors WHERE unit=?", [unit]);
 		conn.addQuery(arrQueries, "DELETE FROM assets WHERE unit=?", [unit]);
 		conn.addQuery(arrQueries, "DELETE FROM messages WHERE unit=?", [unit]);
-	//	conn.addQuery(arrQueries, "DELETE FROM balls WHERE unit=?", [unit]); // if it has a ball, it can't be uncovered
+		//	conn.addQuery(arrQueries, "DELETE FROM balls WHERE unit=?", [unit]); // if it has a ball, it can't be uncovered
 		conn.addQuery(arrQueries, "DELETE FROM units WHERE unit=?", [unit]);
 		cb();
 	});
@@ -95,8 +95,8 @@ function generateQueriesToUnspendTransferOutputsSpentInArchivedUnit(conn, unit, 
 		function(rows){
 			rows.forEach(function(row){
 				conn.addQuery(
-					arrQueries, 
-					"UPDATE outputs SET is_spent=0 WHERE unit=? AND message_index=? AND output_index=?", 
+					arrQueries,
+					"UPDATE outputs SET is_spent=0 WHERE unit=? AND message_index=? AND output_index=?",
 					[row.src_unit, row.src_message_index, row.src_output_index]
 				);
 			});
@@ -127,8 +127,8 @@ function generateQueriesToUnspendHeadersCommissionOutputsSpentInArchivedUnit(con
 		function(rows){
 			rows.forEach(function(row){
 				conn.addQuery(
-					arrQueries, 
-					"UPDATE headers_commission_outputs SET is_spent=0 WHERE address=? AND main_chain_index=?", 
+					arrQueries,
+					"UPDATE headers_commission_outputs SET is_spent=0 WHERE address=? AND main_chain_index=?",
 					[row.address, row.main_chain_index]
 				);
 			});
@@ -159,8 +159,8 @@ function generateQueriesToUnspendWitnessingOutputsSpentInArchivedUnit(conn, unit
 		function(rows){
 			rows.forEach(function(row){
 				conn.addQuery(
-					arrQueries, 
-					"UPDATE witnessing_outputs SET is_spent=0 WHERE address=? AND main_chain_index=?", 
+					arrQueries,
+					"UPDATE witnessing_outputs SET is_spent=0 WHERE address=? AND main_chain_index=?",
 					[row.address, row.main_chain_index]
 				);
 			});

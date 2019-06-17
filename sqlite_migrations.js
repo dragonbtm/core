@@ -4,7 +4,7 @@ var eventBus = require('./event_bus.js');
 var constants = require("./constants.js");
 var conf = require("./conf.js");
 
-var VERSION = 21;
+var VERSION = 29;
 
 var async = require('async');
 var bCordova = (typeof window === 'object' && window.cordova);
@@ -167,7 +167,7 @@ function migrateDb(connection, onDone){
 						"+(conf.bLight ? '' : "CONSTRAINT attestationsByAttestorAddress FOREIGN KEY (attestor_address) REFERENCES addresses(address),")+" \n\
 						FOREIGN KEY (unit) REFERENCES units(unit) \n\
 					)");
-					connection.addQuery(arrQueries, 
+					connection.addQuery(arrQueries,
 						"CREATE INDEX IF NOT EXISTS attestedFieldsByAttestorFieldValue ON attested_fields(attestor_address, `field`, `value`)");
 					connection.addQuery(arrQueries, "CREATE INDEX IF NOT EXISTS attestedFieldsByAddressField ON attested_fields(address, `field`)");
 					connection.addQuery(arrQueries, "CREATE TABLE IF NOT EXISTS original_addresses ( \n\
@@ -187,7 +187,7 @@ function migrateDb(connection, onDone){
 								for (var field in attestation.profile){
 									var value = attestation.profile[field];
 									if (field.length <= constants.MAX_PROFILE_FIELD_LENGTH && typeof value === 'string' && value.length <= constants.MAX_PROFILE_VALUE_LENGTH){
-										connection.addQuery(arrQueries, 
+										connection.addQuery(arrQueries,
 											"INSERT "+connection.getIgnore()+" INTO attested_fields \n\
 											(unit, message_index, attestor_address, address, field, value) VALUES(?,?, ?,?, ?,?)",
 											[row.unit, row.message_index, row.attestor_address, row.address, field, value]);
@@ -208,6 +208,73 @@ function migrateDb(connection, onDone){
 					connection.addQuery(arrQueries, "DELETE FROM known_bad_joints");
 				if (version < 21)
 					connection.addQuery(arrQueries, "ALTER TABLE push_registrations ADD COLUMN platform TEXT NOT NULL DEFAULT 'android'");
+				if (version < 22)
+					connection.addQuery(arrQueries, "CREATE INDEX IF NOT EXISTS sharedAddressSigningPathsByDeviceAddress ON shared_address_signing_paths(device_address);");
+				if (version < 23){
+					connection.addQuery(arrQueries, "CREATE TABLE IF NOT EXISTS peer_addresses ( \n\
+						address CHAR(32) NOT NULL, \n\
+						signing_paths VARCHAR(255) NULL, \n\
+						device_address CHAR(33) NOT NULL, \n\
+						definition TEXT NULL, \n\
+						creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, \n\
+						PRIMARY KEY (address), \n\
+						FOREIGN KEY (device_address) REFERENCES correspondent_devices(device_address) \n\
+					)");
+					connection.addQuery(arrQueries, "CREATE TABLE IF NOT EXISTS prosaic_contracts ( \n\
+						hash CHAR(44) NOT NULL PRIMARY KEY, \n\
+						peer_address CHAR(32) NOT NULL, \n\
+						peer_device_address CHAR(33) NOT NULL, \n\
+						my_address  CHAR(32) NOT NULL, \n\
+						is_incoming TINYINT NOT NULL, \n\
+						creation_date TIMESTAMP NOT NULL, \n\
+						ttl INT NOT NULL DEFAULT 168, -- 168 hours = 24 * 7 = 1 week \n\
+						status TEXT CHECK (status IN('pending', 'revoked', 'accepted', 'declined')) NOT NULL DEFAULT 'active', \n\
+						title VARCHAR(1000) NOT NULL, \n\
+						`text` TEXT NOT NULL, \n\
+						shared_address CHAR(32), \n\
+						unit CHAR(44), \n\
+						cosigners VARCHAR(1500), \n\
+						FOREIGN KEY (my_address) REFERENCES my_addresses(address) \n\
+					)");
+				}
+				if (version < 24){
+					connection.addQuery(arrQueries, "BEGIN TRANSACTION");
+					connection.addQuery(arrQueries, "CREATE TABLE asset_attestors_new ( \n\
+						unit CHAR(44) NOT NULL, \n\
+						message_index TINYINT NOT NULL, \n\
+						asset CHAR(44) NOT NULL, -- in the initial attestor list: same as unit  \n\
+						attestor_address CHAR(32) NOT NULL, \n\
+						PRIMARY KEY (unit, message_index, attestor_address), \n\
+						UNIQUE (asset, attestor_address, unit), \n\
+						FOREIGN KEY (unit) REFERENCES units(unit), \n\
+						CONSTRAINT assetAttestorsByAsset FOREIGN KEY (asset) REFERENCES assets(unit) \n\
+					)");
+					connection.addQuery(arrQueries, "INSERT INTO asset_attestors_new SELECT * FROM asset_attestors");
+					connection.addQuery(arrQueries, "DROP TABLE asset_attestors");
+					connection.addQuery(arrQueries, "ALTER TABLE asset_attestors_new RENAME TO asset_attestors");
+					connection.addQuery(arrQueries, "COMMIT");
+				}
+				if (version < 25)
+					connection.addQuery(arrQueries, "ALTER TABLE correspondent_devices ADD COLUMN is_blackhole TINYINT NOT NULL DEFAULT 0");
+				if (version < 26){
+					connection.addQuery(arrQueries, "ALTER TABLE correspondent_devices ADD COLUMN push_enabled TINYINT NOT NULL DEFAULT 1");
+					connection.addQuery(arrQueries, "CREATE TABLE IF NOT EXISTS correspondent_settings ( \n\
+						device_address CHAR(33) NOT NULL, \n\
+						correspondent_address CHAR(33) NOT NULL, \n\
+						push_enabled TINYINT NOT NULL, \n\
+						creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, \n\
+						PRIMARY KEY (device_address, correspondent_address) \n\
+					)");
+					connection.addQuery(arrQueries, "PRAGMA user_version=26");
+				}
+				if (version < 27){
+					connection.addQuery(arrQueries, "CREATE UNIQUE INDEX IF NOT EXISTS unqPayloadHash ON private_profiles(payload_hash)");
+				}
+				if (version < 28){
+					connection.addQuery(arrQueries, "ALTER TABLE units ADD COLUMN timestamp INT NOT NULL DEFAULT 0");
+				}
+				if (version < 29)
+					connection.addQuery(arrQueries, "DELETE FROM known_bad_joints");
 				cb();
 			}
 		], function(){
@@ -225,8 +292,5 @@ function migrateDb(connection, onDone){
 	});
 }
 
-function rescanAttestations(arrQueries, cb){
-	
-}
 
 exports.migrateDb = migrateDb;

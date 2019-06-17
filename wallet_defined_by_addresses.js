@@ -29,8 +29,8 @@ function sendOfferToCreateNewSharedAddress(device_address, arrAddressDefinitionT
 // called from UI (unused)
 function sendApprovalOfNewSharedAddress(device_address, address_definition_template_chash, address, assocDeviceAddressesByRelativeSigningPaths){
 	device.sendMessageToDevice(device_address, "approve_new_shared_address", {
-		address_definition_template_chash: address_definition_template_chash, 
-		address: address, 
+		address_definition_template_chash: address_definition_template_chash,
+		address: address,
 		device_addresses_by_relative_signing_paths: assocDeviceAddressesByRelativeSigningPaths
 	});
 }
@@ -48,8 +48,56 @@ function sendNewSharedAddress(device_address, address, arrDefinition, assocSigne
 	});
 }
 
+// when a peer has lost shared address definitions after a wallet recovery, we can resend them
+function sendToPeerAllSharedAddressesHavingUnspentOutputs(device_address, asset, callbacks){
+	var asset_filter = !asset || asset == "base" ? " AND outputs.asset IS NULL " : " AND outputs.asset='"+asset+"'";
+	db.query(
+		"SELECT DISTINCT shared_address FROM shared_address_signing_paths CROSS JOIN outputs ON shared_address_signing_paths.shared_address=outputs.address\n\
+		 WHERE device_address=? AND outputs.is_spent=0" + asset_filter, [device_address], function(rows){
+			if (rows.length === 0)
+				return callbacks.ifNoFundedSharedAddress();
+			rows.forEach(function(row){
+				sendSharedAddressToPeer(device_address, row.shared_address, function(err){
+					if (err)
+						return console.log(err)
+					console.log("Definition for " + row.shared_address + " will be sent to " + device_address);
+				});
+			});
+			return callbacks.ifFundedSharedAddress(rows.length);
+		});
+}
 
-
+// read shared address definition and signing paths then send them to peer
+function sendSharedAddressToPeer(device_address, shared_address, handle){
+	var arrDefinition;
+	var assocSignersByPath={};
+	async.series([
+			function(cb){
+				db.query("SELECT definition FROM shared_addresses WHERE shared_address=?", [shared_address], function(rows){
+					if (!rows[0])
+						return cb("Definition not found for " + shared_address);
+					arrDefinition = JSON.parse(rows[0].definition);
+					return cb(null);
+				});
+			},
+			function(cb){
+				db.query("SELECT signing_path,address,member_signing_path,device_address FROM shared_address_signing_paths WHERE shared_address=?", [shared_address], function(rows){
+					if (rows.length<2)
+						return cb("Less than 2 signing paths found for " + shared_address);
+					rows.forEach(function(row){
+						assocSignersByPath[row.signing_path] = {address: row.address, member_signing_path: row.member_signing_path, device_address: row.device_address};
+					});
+					return cb(null);
+				});
+			}
+		],
+		function(err){
+			if (err)
+				return handle(err);
+			sendNewSharedAddress(device_address, shared_address, arrDefinition, assocSignersByPath);
+			return handle(null);
+		});
+}
 
 
 // called from UI (unused)
@@ -65,11 +113,11 @@ function createNewSharedAddressByTemplate(arrAddressDefinitionTemplate, my_addre
 		var arrMemberSigningPaths = Object.keys(assocMemberDeviceAddressesBySigningPaths);
 		var address_definition_template_chash = objectHash.getChash160(arrAddressDefinitionTemplate);
 		db.query(
-			"INSERT INTO pending_shared_addresses (definition_template_chash, definition_template) VALUES(?,?)", 
+			"INSERT INTO pending_shared_addresses (definition_template_chash, definition_template) VALUES(?,?)",
 			[address_definition_template_chash, JSON.stringify(arrAddressDefinitionTemplate)],
 			function(){
 				async.eachSeries(
-					arrMemberSigningPaths, 
+					arrMemberSigningPaths,
 					function(signing_path, cb){
 						var device_address = assocMemberDeviceAddressesBySigningPaths[signing_path];
 						var fields = "definition_template_chash, device_address, signing_path";
@@ -102,8 +150,8 @@ function createNewSharedAddressByTemplate(arrAddressDefinitionTemplate, my_addre
 function approvePendingSharedAddress(address_definition_template_chash, from_address, address, assocDeviceAddressesByRelativeSigningPaths){
 	db.query( // may update several rows if the device is referenced multiple times from the definition template
 		"UPDATE pending_shared_address_signing_paths SET address=?, device_addresses_by_relative_signing_paths=?, approval_date="+db.getNow()+" \n\
-		WHERE definition_template_chash=? AND device_address=?", 
-		[address, JSON.stringify(assocDeviceAddressesByRelativeSigningPaths), address_definition_template_chash, from_address], 
+		WHERE definition_template_chash=? AND device_address=?",
+		[address, JSON.stringify(assocDeviceAddressesByRelativeSigningPaths), address_definition_template_chash, from_address],
 		function(){
 			// check if this is the last required approval
 			db.query(
@@ -122,7 +170,7 @@ function approvePendingSharedAddress(address_definition_template_chash, from_add
 						params['address@'+row.device_address] = row.address;
 					});
 					db.query(
-						"SELECT definition_template FROM pending_shared_addresses WHERE definition_template_chash=?", 
+						"SELECT definition_template FROM pending_shared_addresses WHERE definition_template_chash=?",
 						[address_definition_template_chash],
 						function(templ_rows){
 							if (templ_rows.length !== 1)
@@ -131,8 +179,8 @@ function approvePendingSharedAddress(address_definition_template_chash, from_add
 							var arrDefinition = Definition.replaceInTemplate(arrAddressDefinitionTemplate, params);
 							var shared_address = objectHash.getChash160(arrDefinition);
 							db.query(
-								"INSERT INTO shared_addresses (shared_address, definition) VALUES (?,?)", 
-								[shared_address, JSON.stringify(arrDefinition)], 
+								"INSERT INTO shared_addresses (shared_address, definition) VALUES (?,?)",
+								[shared_address, JSON.stringify(arrDefinition)],
 								function(){
 									var arrQueries = [];
 									var assocSignersByPath = {};
@@ -142,17 +190,17 @@ function approvePendingSharedAddress(address_definition_template_chash, from_add
 											var signing_device_address = assocDeviceAddressesByRelativeSigningPaths[member_signing_path];
 											// this is full signing path, from root of shared address (not from root of member address)
 											var full_signing_path = row.signing_path + member_signing_path.substring(1);
-											// note that we are inserting row.device_address (the device we requested approval from), not signing_device_address 
+											// note that we are inserting row.device_address (the device we requested approval from), not signing_device_address
 											// (the actual signer), because signing_device_address might not be our correspondent. When we need to sign, we'll
-											// send unsigned unit to row.device_address and it'll forward the request to signing_device_address (subject to 
+											// send unsigned unit to row.device_address and it'll forward the request to signing_device_address (subject to
 											// row.device_address being online)
-											db.addQuery(arrQueries, 
+											db.addQuery(arrQueries,
 												"INSERT INTO shared_address_signing_paths \n\
-												(shared_address, address, signing_path, member_signing_path, device_address) VALUES(?,?,?,?,?)", 
+												(shared_address, address, signing_path, member_signing_path, device_address) VALUES(?,?,?,?,?)",
 												[shared_address, row.address, full_signing_path, member_signing_path, row.device_address]);
 											assocSignersByPath[full_signing_path] = {
-												device_address: row.device_address, 
-												address: row.address, 
+												device_address: row.device_address,
+												address: row.address,
 												member_signing_path: member_signing_path
 											};
 										}
@@ -191,15 +239,15 @@ function deletePendingSharedAddress(address_definition_template_chash){
 function addNewSharedAddress(address, arrDefinition, assocSignersByPath, bForwarded, onDone){
 //	network.addWatchedAddress(address);
 	db.query(
-		"INSERT "+db.getIgnore()+" INTO shared_addresses (shared_address, definition) VALUES (?,?)", 
-		[address, JSON.stringify(arrDefinition)], 
+		"INSERT "+db.getIgnore()+" INTO shared_addresses (shared_address, definition) VALUES (?,?)",
+		[address, JSON.stringify(arrDefinition)],
 		function(){
 			var arrQueries = [];
 			for (var signing_path in assocSignersByPath){
 				var signerInfo = assocSignersByPath[signing_path];
-				db.addQuery(arrQueries, 
+				db.addQuery(arrQueries,
 					"INSERT "+db.getIgnore()+" INTO shared_address_signing_paths \n\
-					(shared_address, address, signing_path, member_signing_path, device_address) VALUES (?,?,?,?,?)", 
+					(shared_address, address, signing_path, member_signing_path, device_address) VALUES (?,?,?,?,?)",
 					[address, signerInfo.address, signing_path, signerInfo.member_signing_path, signerInfo.device_address]);
 			}
 			async.series(arrQueries, function(){
@@ -243,10 +291,10 @@ function determineIfIncludesMeAndRewriteDeviceAddress(assocSignersByPath, handle
 	db.query(
 		"SELECT address, 'my' AS type FROM my_addresses WHERE address IN(?) \n\
 		UNION \n\
-		SELECT shared_address AS address, 'shared' AS type FROM shared_addresses WHERE shared_address IN(?)", 
+		SELECT shared_address AS address, 'shared' AS type FROM shared_addresses WHERE shared_address IN(?)",
 		[arrMemberAddresses, arrMemberAddresses],
 		function(rows){
-		//	handleResult(rows.length === arrMyMemberAddresses.length ? null : "Some of my member addresses not found");
+			//	handleResult(rows.length === arrMyMemberAddresses.length ? null : "Some of my member addresses not found");
 			if (rows.length === 0)
 				return handleResult("I am not a member of this shared address");
 			var arrMyMemberAddresses = rows.filter(function(row){ return (row.type === 'my'); }).map(function(row){ return row.address; });
@@ -274,7 +322,7 @@ function forwardNewSharedAddressToCosignersOfMyMemberAddresses(address, arrDefin
 	if (arrMyMemberAddresses.length === 0)
 		throw Error("my member addresses not found");
 	db.query(
-		"SELECT DISTINCT device_address FROM my_addresses JOIN wallet_signing_paths USING(wallet) WHERE address IN(?) AND device_address!=?", 
+		"SELECT DISTINCT device_address FROM my_addresses JOIN wallet_signing_paths USING(wallet) WHERE address IN(?) AND device_address!=?",
 		[arrMyMemberAddresses, device.getMyDeviceAddress()],
 		function(rows){
 			rows.forEach(function(row){
@@ -381,9 +429,9 @@ function validateAddressDefinitionTemplate(arrDefinitionTemplate, from_address, 
 		return handleResult("my device address not mentioned in the definition");
 	if (arrDeviceAddresses.indexOf(from_address) === - 1)
 		return handleResult("sender device address not mentioned in the definition");
-	
+
 	var params = {};
-	// to fill the template for validation, assign my device address (without leading 0) to all member devices 
+	// to fill the template for validation, assign my device address (without leading 0) to all member devices
 	// (we need just any valid address with a definition)
 	var fake_address = device.getMyDeviceAddress().substr(1);
 	arrDeviceAddresses.forEach(function(device_address){
@@ -420,8 +468,8 @@ function validateAddressDefinition(arrDefinition, handleResult){
 function forwardPrivateChainsToOtherMembersOfAddresses(arrChains, arrAddresses, conn, onSaved){
 	conn = conn || db;
 	conn.query(
-		"SELECT device_address FROM shared_address_signing_paths WHERE shared_address IN(?) AND device_address!=?", 
-		[arrAddresses, device.getMyDeviceAddress()], 
+		"SELECT device_address FROM shared_address_signing_paths WHERE shared_address IN(?) AND device_address!=?",
+		[arrAddresses, device.getMyDeviceAddress()],
 		function(rows){
 			console.log("shared address devices: "+rows.length);
 			var arrDeviceAddresses = rows.map(function(row){ return row.device_address; });
@@ -434,8 +482,8 @@ function readAllControlAddresses(conn, arrAddresses, handleLists){
 	conn = conn || db;
 	conn.query(
 		"SELECT DISTINCT address, shared_address_signing_paths.device_address, (correspondent_devices.device_address IS NOT NULL) AS have_correspondent \n\
-		FROM shared_address_signing_paths LEFT JOIN correspondent_devices USING(device_address) WHERE shared_address IN(?)", 
-		[arrAddresses], 
+		FROM shared_address_signing_paths LEFT JOIN correspondent_devices USING(device_address) WHERE shared_address IN(?)",
+		[arrAddresses],
 		function(rows){
 			if (rows.length === 0)
 				return handleLists([], []);
@@ -465,8 +513,8 @@ function readRequiredCosigners(shared_address, arrSigningDeviceAddresses, handle
 
 function readSharedAddressDefinition(shared_address, handleDefinition){
 	db.query(
-		"SELECT definition, "+db.getUnixTimestamp("creation_date")+" AS creation_ts FROM shared_addresses WHERE shared_address=?", 
-		[shared_address], 
+		"SELECT definition, "+db.getUnixTimestamp("creation_date")+" AS creation_ts FROM shared_addresses WHERE shared_address=?",
+		[shared_address],
 		function(rows){
 			if (rows.length !== 1)
 				throw Error('shared definition not found '+shared_address);
@@ -495,15 +543,26 @@ function readSharedAddressCosigners(shared_address, handleCosigners){
 
 // returns list of payment addresses of peers
 function readSharedAddressPeerAddresses(shared_address, handlePeerAddresses){
+	readSharedAddressPeers(shared_address, function(assocNamesByAddress){
+		handlePeerAddresses(Object.keys(assocNamesByAddress));
+	});
+}
+
+// returns assoc array: peer name by address
+function readSharedAddressPeers(shared_address, handlePeers){
 	db.query(
-		"SELECT DISTINCT address FROM shared_address_signing_paths WHERE shared_address=? AND device_address!=?",
+		"SELECT DISTINCT address, name FROM shared_address_signing_paths LEFT JOIN correspondent_devices USING(device_address) \n\
+		WHERE shared_address=? AND shared_address_signing_paths.device_address!=?",
 		[shared_address, device.getMyDeviceAddress()],
 		function(rows){
 			// no problem if no peers found: the peer can be part of our multisig address and his device address will be rewritten to ours
-		//	if (rows.length === 0)
-		//		throw Error("no peers found for shared address "+shared_address);
-			var arrPeerAddresses = rows.map(function(row){ return row.address; });
-			handlePeerAddresses(arrPeerAddresses);
+			//	if (rows.length === 0)
+			//		throw Error("no peers found for shared address "+shared_address);
+			var assocNamesByAddress = {};
+			rows.forEach(function(row){
+				assocNamesByAddress[row.address] = row.name || 'unknown peer';
+			});
+			handlePeers(assocNamesByAddress);
 		}
 	);
 }
@@ -540,9 +599,12 @@ exports.handleNewSharedAddress = handleNewSharedAddress;
 exports.forwardPrivateChainsToOtherMembersOfAddresses = forwardPrivateChainsToOtherMembersOfAddresses;
 exports.readSharedAddressCosigners = readSharedAddressCosigners;
 exports.readSharedAddressPeerAddresses = readSharedAddressPeerAddresses;
+exports.readSharedAddressPeers = readSharedAddressPeers;
 exports.getPeerAddressesFromSigners = getPeerAddressesFromSigners;
 exports.readSharedAddressDefinition = readSharedAddressDefinition;
 exports.determineIfHasMerkle = determineIfHasMerkle;
 exports.createNewSharedAddress = createNewSharedAddress;
 exports.createNewSharedAddressByTemplate = createNewSharedAddressByTemplate;
 exports.readAllControlAddresses = readAllControlAddresses;
+exports.sendToPeerAllSharedAddressesHavingUnspentOutputs = sendToPeerAllSharedAddressesHavingUnspentOutputs;
+exports.sendSharedAddressToPeer = sendSharedAddressToPeer;

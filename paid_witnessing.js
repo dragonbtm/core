@@ -14,8 +14,8 @@ var paidWitnessEvents = [];
 
 function calcWitnessEarnings(conn, type, from_main_chain_index, to_main_chain_index, address, callbacks){
 	conn.query(
-		"SELECT COUNT(1) AS count FROM units WHERE is_on_main_chain=1 AND is_stable=1 AND main_chain_index>=? AND main_chain_index<=?", 
-		[to_main_chain_index, to_main_chain_index+constants.COUNT_MC_BALLS_FOR_PAID_WITNESSING+1], 
+		"SELECT COUNT(1) AS count FROM units WHERE is_on_main_chain=1 AND is_stable=1 AND main_chain_index>=? AND main_chain_index<=?",
+		[to_main_chain_index, to_main_chain_index+constants.COUNT_MC_BALLS_FOR_PAID_WITNESSING+1],
 		function(count_rows){
 			if (count_rows[0].count !== constants.COUNT_MC_BALLS_FOR_PAID_WITNESSING+2)
 				return callbacks.ifError("not enough stable MC units after to_main_chain_index");
@@ -45,7 +45,7 @@ function readMaxWitnessSpendableMcIndex(conn, handleMaxSpendableMcIndex){
 			});
 		}
 		* /
-		//arrParents ? checkIfMajorityWitnessedByParentsAndAdjust() : 
+		//arrParents ? checkIfMajorityWitnessedByParentsAndAdjust() :
 		handleMaxSpendableMcIndex(max_spendable_mc_index);
 	});
 }
@@ -73,7 +73,7 @@ function buildPaidWitnessesTillMainChainIndex(conn, to_main_chain_index, cb){
 	profiler.start();
 	var cross = (conf.storage === 'sqlite') ? 'CROSS' : ''; // correct the query planner
 	conn.query(
-		"SELECT MIN(main_chain_index) AS min_main_chain_index FROM balls "+cross+" JOIN units USING(unit) WHERE count_paid_witnesses IS NULL", 
+		"SELECT MIN(main_chain_index) AS min_main_chain_index FROM balls "+cross+" JOIN units USING(unit) WHERE count_paid_witnesses IS NULL",
 		function(rows){
 			profiler.stop('mc-wc-minMCI');
 			var main_chain_index = rows[0].min_main_chain_index;
@@ -107,8 +107,8 @@ function buildPaidWitnessesForMainChainIndex(conn, main_chain_index, cb){
 		function(rows){
 			profiler.stop('mc-wc-select-count');
 			var countRAM = _.countBy(storage.assocStableUnits, function(props){
-				return props.main_chain_index <= (main_chain_index+constants.COUNT_MC_BALLS_FOR_PAID_WITNESSING+1) 
-					&& props.main_chain_index >= main_chain_index 
+				return props.main_chain_index <= (main_chain_index+constants.COUNT_MC_BALLS_FOR_PAID_WITNESSING+1)
+					&& props.main_chain_index >= main_chain_index
 					&& props.is_on_main_chain;
 			})["1"];
 			var count = conf.bFaster ? countRAM : rows[0].count;
@@ -139,9 +139,9 @@ function buildPaidWitnessesForMainChainIndex(conn, main_chain_index, cb){
 							}
 							paidWitnessEvents = [];
 							async.eachSeries(
-								conf.bFaster ? unitsRAM : rows, 
+								conf.bFaster ? unitsRAM : rows,
 								function(row, cb2){
-									// the unit itself might be never majority witnessed by unit-designated witnesses (which might be far off), 
+									// the unit itself might be never majority witnessed by unit-designated witnesses (which might be far off),
 									// but its payload commission still belongs to and is spendable by the MC-unit-designated witnesses.
 									//if (row.is_stable !== 1)
 									//    throw "unit "+row.unit+" is not on stable MC yet";
@@ -152,6 +152,7 @@ function buildPaidWitnessesForMainChainIndex(conn, main_chain_index, cb){
 									if (err) // impossible
 										throw Error(err);
 									//var t=Date.now();
+									profiler.start();
 									var countPaidWitnesses = _.countBy(paidWitnessEvents, function(v){return v.unit});
 									var assocPaidAmountsByAddress = _.reduce(paidWitnessEvents, function(amountsByAddress, v) {
 										var objUnit = storage.assocStableUnits[v.unit];
@@ -162,9 +163,10 @@ function buildPaidWitnessesForMainChainIndex(conn, main_chain_index, cb){
 										return amountsByAddress;
 									}, {});
 									var arrPaidAmounts2 = _.map(assocPaidAmountsByAddress, function(amount, address) {return {address: address, amount: amount}});
-									if (conf.bFaster)
-										return conn.query("INSERT INTO witnessing_outputs (main_chain_index, address, amount) VALUES " + arrPaidAmounts2.map(function(o){ return "("+main_chain_index+", "+db.escape(o.address)+", "+o.amount+")" }).join(', '), function(){ cb(); });
+									profiler.stop('mc-wc-js-aggregate-events');
 									profiler.start();
+									if (conf.bFaster)
+										return conn.query("INSERT INTO witnessing_outputs (main_chain_index, address, amount) VALUES " + arrPaidAmounts2.map(function(o){ return "("+main_chain_index+", "+db.escape(o.address)+", "+o.amount+")" }).join(', '), function(){ profiler.stop('mc-wc-aggregate-events'); cb(); });
 									conn.query(
 										"INSERT INTO witnessing_outputs (main_chain_index, address, amount) \n\
 										SELECT main_chain_index, address, \n\
@@ -216,30 +218,31 @@ function readMcUnitWitnesses(conn, main_chain_index, handleWitnesses){
 
 var et, rt;
 function buildPaidWitnesses(conn, objUnitProps, arrWitnesses, onDone){
-	
+
 	function updateCountPaidWitnesses(count_paid_witnesses){
 		conn.query("UPDATE balls SET count_paid_witnesses=? WHERE unit=?", [count_paid_witnesses, objUnitProps.unit], function(){
 			profiler.stop('mc-wc-insert-events');
 			onDone();
 		});
 	}
-	
+
 	var unit = objUnitProps.unit;
 	var to_main_chain_index = objUnitProps.main_chain_index + constants.COUNT_MC_BALLS_FOR_PAID_WITNESSING;
-	
+
 	var t=Date.now();
 	graph.readDescendantUnitsByAuthorsBeforeMcIndex(conn, objUnitProps, arrWitnesses, to_main_chain_index, function(arrUnits){
 		rt+=Date.now()-t;
 		t=Date.now();
+		var force_index = (conf.storage === 'mysql') ? 'FORCE INDEX (PRIMARY)' : ''; // force mysql to use primary key on unit_authors
 		var strUnitsList = (arrUnits.length === 0) ? 'NULL' : arrUnits.map(function(unit){ return conn.escape(unit); }).join(', ');
-			//throw "no witnesses before mc "+to_main_chain_index+" for unit "+objUnitProps.unit;
+		//throw "no witnesses before mc "+to_main_chain_index+" for unit "+objUnitProps.unit;
 		profiler.start();
 		conn.cquery( // we don't care if the unit is majority witnessed by the unit-designated witnesses
 			// _left_ join forces use of indexes in units
 			// can't get rid of filtering by address because units can be co-authored by witness with somebody else
 			"SELECT address \n\
 			FROM units \n\
-			LEFT JOIN unit_authors USING(unit) \n\
+			LEFT JOIN unit_authors "+ force_index +" USING(unit) \n\
 			WHERE unit IN("+strUnitsList+") AND address IN(?) AND +sequence='good' \n\
 			GROUP BY address",
 			[arrWitnesses],
@@ -278,7 +281,7 @@ function buildPaidWitnesses(conn, objUnitProps, arrWitnesses, onDone){
 			}
 		);
 	});
-	
+
 }
 
 function getMaxSpendableMciForLastBallMci(last_ball_mci){

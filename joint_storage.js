@@ -101,7 +101,7 @@ function readDependentJointsThatAreReady(unit, handleDependentJoint){
 			"+where+" \n\
 			GROUP BY dependencies.unit \n\
 			HAVING count_missing_parents=0 \n\
-			ORDER BY NULL", 
+			ORDER BY NULL",
 			function(rows){
 				//console.log(rows.length+" joints are ready");
 				//console.log("deps: "+(Date.now()-t));
@@ -125,12 +125,12 @@ function findLostJoints(handleLostJoints){
 		FROM dependencies \n\
 		LEFT JOIN unhandled_joints ON depends_on_unit=unhandled_joints.unit \n\
 		LEFT JOIN units ON depends_on_unit=units.unit \n\
-		WHERE unhandled_joints.unit IS NULL AND units.unit IS NULL AND dependencies.creation_date < " + db.addTime("-8 SECOND"), 
+		WHERE unhandled_joints.unit IS NULL AND units.unit IS NULL AND dependencies.creation_date < " + db.addTime("-8 SECOND"),
 		function(rows){
 			//console.log(rows.length+" lost joints");
 			if (rows.length === 0)
 				return;
-			handleLostJoints(rows.map(function(row){ return row.depends_on_unit; })); 
+			handleLostJoints(rows.map(function(row){ return row.depends_on_unit; }));
 		}
 	);
 }
@@ -227,20 +227,22 @@ function purgeUncoveredNonserialJoints(bByExistenceOfChildren, onDone){
 				LIMIT 0,1 \n\
 			)) \n\
 			/* AND NOT EXISTS (SELECT * FROM unhandled_joints) */ \n\
-		ORDER BY units."+order_column+" DESC", 
+		ORDER BY units."+order_column+" DESC",
 		// some unhandled joints may depend on the unit to be archived but it is not in dependencies because it was known when its child was received
-	//	[constants.MAJORITY_OF_WITNESSES - 1],
+		//	[constants.MAJORITY_OF_WITNESSES - 1],
 		function(rows){
-			async.eachSeries(
-				rows,
-				function(row, cb){
-					breadcrumbs.add("--------------- archiving uncovered unit "+row.unit);
-					storage.readJoint(db, row.unit, {
-						ifNotFound: function(){
-							throw Error("nonserial unit not found?");
-						},
-						ifFound: function(objJoint){
-							db.takeConnectionFromPool(function(conn){
+			if (rows.length === 0)
+				return onDone();
+			db.takeConnectionFromPool(function (conn) {
+				async.eachSeries(
+					rows,
+					function (row, cb) {
+						breadcrumbs.add("--------------- archiving uncovered unit " + row.unit);
+						storage.readJoint(conn, row.unit, {
+							ifNotFound: function () {
+								throw Error("nonserial unit not found?");
+							},
+							ifFound: function (objJoint) {
 								mutex.lock(["write"], function(unlock){
 									var arrQueries = [];
 									conn.addQuery(arrQueries, "BEGIN");
@@ -263,30 +265,27 @@ function purgeUncoveredNonserialJoints(bByExistenceOfChildren, onDone){
 													storage.assocUnstableUnits[parent_unit].is_free = 1;
 											});
 											unlock();
-											conn.release();
 											cb();
 										});
 									});
 								});
-							});
-						}
-					});
-				},
-				function(){
-					if (rows.length > 0)
-						return purgeUncoveredNonserialJoints(true, onDone); // to clean chains of bad units
-					if (!bByExistenceOfChildren)
-						return onDone();
-					// else 0 rows and bByExistenceOfChildren
-					db.query(
-						"UPDATE units SET is_free=1 WHERE is_free=0 AND is_stable=0 \n\
-						AND (SELECT 1 FROM parenthoods WHERE parent_unit=unit LIMIT 1) IS NULL",
-						function(){
-							onDone();
-						}
-					);
-				}
-			);
+							}
+						});
+					},
+					function () {
+						conn.query(
+							"UPDATE units SET is_free=1 WHERE is_free=0 AND is_stable=0 \n\
+							AND (SELECT 1 FROM parenthoods WHERE parent_unit=unit LIMIT 1) IS NULL",
+							function () {
+								conn.release();
+								if (rows.length > 0)
+									return purgeUncoveredNonserialJoints(false, onDone); // to clean chains of bad units
+								onDone();
+							}
+						);
+					}
+				);
+			});
 		}
 	);
 }
@@ -296,15 +295,15 @@ function readJointsSinceMci(mci, handleJoint, onDone){
 	db.query(
 		"SELECT units.unit FROM units LEFT JOIN archived_joints USING(unit) \n\
 		WHERE (is_stable=0 AND main_chain_index>=? OR main_chain_index IS NULL OR is_free=1) AND archived_joints.unit IS NULL \n\
-		ORDER BY +level", 
-		[mci], 
+		ORDER BY +level",
+		[mci],
 		function(rows){
 			async.eachSeries(
-				rows, 
+				rows,
 				function(row, cb){
 					storage.readJoint(db, row.unit, {
 						ifNotFound: function(){
-						//	throw Error("unit "+row.unit+" not found");
+							//	throw Error("unit "+row.unit+" not found");
 							breadcrumbs.add("unit "+row.unit+" not found");
 							cb();
 						},

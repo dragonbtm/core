@@ -28,6 +28,7 @@ var objMyPrevTempDeviceKey;
 var saveTempKeys; // function that saves temp keys
 var bScheduledTempDeviceKeyRotation = false;
 
+var bCordova = (typeof window !== 'undefined' && window && window.cordova);
 
 function getMyDevicePubKey(){
 	if (!objMyPermanentDeviceKey || !objMyPermanentDeviceKey.pub_b64)
@@ -38,7 +39,7 @@ function getMyDevicePubKey(){
 function getMyDeviceAddress(){
 	if (!my_device_address)
 		throw Error('my_device_address not defined');
-	if (typeof window !== 'undefined' && window && window.cordova)
+	if (bCordova)
 		checkDeviceAddress();
 	return my_device_address;
 }
@@ -58,7 +59,7 @@ function setDevicePrivateKey(priv_key){
 	}
 	breadcrumbs.add("same device addresses: "+new_my_device_address);
 	my_device_address = new_my_device_address;
-	// this temp pubkey package signs my permanent key and is actually used only if I'm my own hub. 
+	// this temp pubkey package signs my permanent key and is actually used only if I'm my own hub.
 	// In this case, there are no intermediaries and TLS already provides perfect forward security
 	network.setMyDeviceProps(my_device_address, createTempPubkeyPackage(objMyPermanentDeviceKey.pub_b64));
 	if (bChanged)
@@ -188,7 +189,7 @@ function sendTempPubkey(ws, temp_pubkey, callbacks){
 
 function createTempPubkeyPackage(temp_pubkey){
 	var objTempPubkey = {
-		temp_pubkey: temp_pubkey, 
+		temp_pubkey: temp_pubkey,
 		pubkey: objMyPermanentDeviceKey.pub_b64
 	};
 	objTempPubkey.signature = ecdsaSig.sign(objectHash.getDeviceMessageHashToSign(objTempPubkey), objMyPermanentDeviceKey.priv);
@@ -308,10 +309,10 @@ function decryptPackage(objEncryptedPackage){
 		setTimeout(function(){
 			throw Error("message encrypted to unknown key, device "+my_device_address+", len="+objEncryptedPackage.encrypted_message.length+". The error might be caused by restoring from an old backup or using the same keys on another device.");
 		}, 100);
-	//	eventBus.emit('nonfatal_error', "message encrypted to unknown key, device "+my_device_address+", len="+objEncryptedPackage.encrypted_message.length, new Error('unknown key'));
+		//	eventBus.emit('nonfatal_error', "message encrypted to unknown key, device "+my_device_address+", len="+objEncryptedPackage.encrypted_message.length, new Error('unknown key'));
 		return null;
 	}
-	
+
 	var ecdh = crypto.createECDH('secp256k1');
 	if (process.browser) // workaround bug in crypto-browserify https://github.com/crypto-browserify/createECDH/issues/9
 		ecdh.generateKeys("base64", "compressed");
@@ -327,7 +328,7 @@ function decryptPackage(objEncryptedPackage){
 	var arrChunks = [];
 	var CHUNK_LENGTH = 4096;
 	for (var offset = 0; offset < enc_buf.length; offset += CHUNK_LENGTH){
-	//	console.log('offset '+offset);
+		//	console.log('offset '+offset);
 		arrChunks.push(decipher.update(enc_buf.slice(offset, Math.min(offset+CHUNK_LENGTH, enc_buf.length))));
 	}
 	var decrypted1 = Buffer.concat(arrChunks);
@@ -375,15 +376,14 @@ function resendStalledMessages(delay){
 	if (!objMyPermanentDeviceKey)
 		return console.log("objMyPermanentDeviceKey not set yet, can't resend stalled messages");
 	mutex.lockOrSkip(['stalled'], function(unlock){
-		var bCordova = (typeof window !== 'undefined' && window && window.cordova);
 		db.query(
 			"SELECT "+(bCordova ? "LENGTH(message) AS len" : "message")+", message_hash, `to`, pubkey, hub \n\
 			FROM outbox JOIN correspondent_devices ON `to`=device_address \n\
-			WHERE outbox.creation_date<="+db.addTime("-"+delay+" MINUTE")+" ORDER BY outbox.creation_date", 
+			WHERE outbox.creation_date<="+db.addTime("-"+delay+" MINUTE")+" ORDER BY outbox.creation_date",
 			function(rows){
 				console.log(rows.length+" stalled messages");
 				async.eachSeries(
-					rows, 
+					rows,
 					function(row, cb){
 						if (!row.hub){ // weird error
 							eventBus.emit('nonfatal_error', "no hub in resendStalledMessages: "+JSON.stringify(row)+", l="+rows.length, new Error('no hub'));
@@ -424,8 +424,8 @@ function reliablySendPreparedMessageToHub(ws, recipient_device_pubkey, json, cal
 	var message_hash = objectHash.getBase64Hash(objDeviceMessage);
 	conn = conn || db;
 	conn.query(
-		"INSERT INTO outbox (message_hash, `to`, message) VALUES (?,?,?)", 
-		[message_hash, recipient_device_address, JSON.stringify(objDeviceMessage)], 
+		"INSERT INTO outbox (message_hash, `to`, message) VALUES (?,?,?)",
+		[message_hash, recipient_device_address, JSON.stringify(objDeviceMessage)],
 		function(){
 			if (callbacks && callbacks.onSaved){
 				callbacks.onSaved();
@@ -479,7 +479,7 @@ function sendPreparedMessageToConnectedHub(ws, recipient_device_pubkey, message_
 		var objDeviceMessage = {
 			encrypted_package: objEncryptedPackage,
 			to: recipient_device_address,
-			pubkey: objMyPermanentDeviceKey.pub_b64 // who signs. Essentially, the from again. 
+			pubkey: objMyPermanentDeviceKey.pub_b64 // who signs. Essentially, the from again.
 		};
 		objDeviceMessage.signature = ecdsaSig.sign(objectHash.getDeviceMessageHashToSign(objDeviceMessage), objMyPermanentDeviceKey.priv);
 		network.sendRequest(ws, 'hub/deliver', objDeviceMessage, false, function(ws, request, response){
@@ -508,7 +508,7 @@ function createEncryptedPackage(json, recipient_device_pubkey){
 	var arrChunks = [];
 	var CHUNK_LENGTH = 2003;
 	for (var offset = 0; offset < text.length; offset += CHUNK_LENGTH){
-	//	console.log('offset '+offset);
+		//	console.log('offset '+offset);
 		arrChunks.push(cipher.update(text.slice(offset, Math.min(offset+CHUNK_LENGTH, text.length)), 'utf8'));
 	}
 	arrChunks.push(cipher.final());
@@ -537,8 +537,8 @@ function sendMessageToHub(ws, recipient_device_pubkey, subject, body, callbacks,
 	// this content is hidden from the hub by encryption
 	var json = {
 		from: my_device_address, // presence of this field guarantees that you cannot strip off the signature and add your own signature instead
-		device_hub: my_device_hub, 
-		subject: subject, 
+		device_hub: my_device_hub,
+		subject: subject,
 		body: body
 	};
 	conn = conn || db;
@@ -554,9 +554,16 @@ function sendMessageToHub(ws, recipient_device_pubkey, subject, body, callbacks,
 
 function sendMessageToDevice(device_address, subject, body, callbacks, conn){
 	conn = conn || db;
-	conn.query("SELECT hub, pubkey FROM correspondent_devices WHERE device_address=?", [device_address], function(rows){
+	conn.query("SELECT hub, pubkey, is_blackhole FROM correspondent_devices WHERE device_address=?", [device_address], function(rows){
 		if (rows.length !== 1)
 			throw Error("correspondent not found");
+		if (rows[0].is_blackhole){
+			if (callbacks && callbacks.onSaved)
+				callbacks.onSaved();
+			if (callbacks && callbacks.ifOk)
+				callbacks.ifOk();
+			return;
+		}
 		sendMessageToHub(rows[0].hub, rows[0].pubkey, subject, body, callbacks, conn);
 	});
 }
@@ -601,19 +608,19 @@ function handlePairingMessage(json, device_pubkey, callbacks){
 		return callbacks.ifError("bad reverse pairing secret");
 	eventBus.emit("pairing_attempt", from_address, body.pairing_secret);
 	db.query(
-		"SELECT is_permanent FROM pairing_secrets WHERE pairing_secret IN(?,'*') AND expiry_date>"+db.getNow()+" ORDER BY (pairing_secret=?) DESC LIMIT 1", 
-		[body.pairing_secret, body.pairing_secret], 
+		"SELECT is_permanent FROM pairing_secrets WHERE pairing_secret IN(?,'*') AND expiry_date>"+db.getNow()+" ORDER BY (pairing_secret=?) DESC LIMIT 1",
+		[body.pairing_secret, body.pairing_secret],
 		function(pairing_rows){
 			if (pairing_rows.length === 0)
 				return callbacks.ifError("pairing secret not found or expired");
 			// add new correspondent and delete pending pairing
 			var safe_device_name = body.device_name.replace(/<[^>]*>?/g, '');
 			db.query(
-				"INSERT "+db.getIgnore()+" INTO correspondent_devices (device_address, pubkey, hub, name, is_confirmed) VALUES (?,?,?,?,1)", 
+				"INSERT "+db.getIgnore()+" INTO correspondent_devices (device_address, pubkey, hub, name, is_confirmed) VALUES (?,?,?,?,1)",
 				[from_address, device_pubkey, json.device_hub, safe_device_name],
 				function(){
 					db.query( // don't update name if already confirmed
-						"UPDATE correspondent_devices SET is_confirmed=1, name=? WHERE device_address=? AND is_confirmed=0", 
+						"UPDATE correspondent_devices SET is_confirmed=1, name=? WHERE device_address=? AND is_confirmed=0",
 						[safe_device_name, from_address],
 						function(){
 							eventBus.emit("paired", from_address, body.pairing_secret);
@@ -623,6 +630,7 @@ function handlePairingMessage(json, device_pubkey, callbacks){
 							}
 							if (body.reverse_pairing_secret)
 								sendPairingMessage(json.device_hub, device_pubkey, body.reverse_pairing_secret, null);
+							db.query("UPDATE correspondent_devices SET is_blackhole=0 WHERE device_address=?", [from_address]);
 							callbacks.ifOk();
 						}
 					);
@@ -641,7 +649,7 @@ function addUnconfirmedCorrespondent(device_pubkey, device_hub, device_name, onD
 	console.log("addUnconfirmedCorrespondent");
 	var device_address = objectHash.getDeviceAddress(device_pubkey);
 	db.query(
-		"INSERT "+db.getIgnore()+" INTO correspondent_devices (device_address, pubkey, hub, name, is_confirmed) VALUES (?,?,?,?,0)", 
+		"INSERT "+db.getIgnore()+" INTO correspondent_devices (device_address, pubkey, hub, name, is_confirmed) VALUES (?,?,?,?,0)",
 		[device_address, device_pubkey, device_hub, device_name],
 		function(){
 			if (onDone)
@@ -664,8 +672,8 @@ function readCorrespondent(device_address, handleCorrespondent){
 
 function readCorrespondentsByDeviceAddresses(arrDeviceAddresses, handleCorrespondents){
 	db.query(
-		"SELECT device_address, hub, name, pubkey, my_record_pref, peer_record_pref FROM correspondent_devices WHERE device_address IN(?) ORDER BY name", 
-		[arrDeviceAddresses], 
+		"SELECT device_address, hub, name, pubkey, my_record_pref, peer_record_pref FROM correspondent_devices WHERE device_address IN(?) ORDER BY name",
+		[arrDeviceAddresses],
 		function(rows){
 			handleCorrespondents(rows);
 		}
@@ -674,8 +682,8 @@ function readCorrespondentsByDeviceAddresses(arrDeviceAddresses, handleCorrespon
 
 function updateCorrespondentProps(correspondent, onDone){
 	db.query(
-		"UPDATE correspondent_devices SET hub=?, name=?, my_record_pref=?, peer_record_pref=? WHERE device_address=?", 
-		[correspondent.hub, correspondent.name, correspondent.my_record_pref, correspondent.peer_record_pref, correspondent.device_address], 
+		"UPDATE correspondent_devices SET hub=?, name=?, my_record_pref=?, peer_record_pref=? WHERE device_address=?",
+		[correspondent.hub, correspondent.name, correspondent.my_record_pref, correspondent.peer_record_pref, correspondent.device_address],
 		function(){
 			if (onDone) onDone();
 		}
@@ -687,7 +695,7 @@ function addIndirectCorrespondents(arrOtherCosigners, onDone){
 		if (correspondent.device_address === my_device_address)
 			return cb();
 		db.query(
-			"INSERT "+db.getIgnore()+" INTO correspondent_devices (device_address, hub, name, pubkey, is_indirect) VALUES(?,?,?,?,1)", 
+			"INSERT "+db.getIgnore()+" INTO correspondent_devices (device_address, hub, name, pubkey, is_indirect) VALUES(?,?,?,?,1)",
 			[correspondent.device_address, correspondent.hub, correspondent.name, correspondent.pubkey],
 			function(){
 				cb();
@@ -702,6 +710,18 @@ function removeCorrespondentDevice(device_address, onDone){
 	db.addQuery(arrQueries, "DELETE FROM outbox WHERE `to`=?", [device_address]);
 	db.addQuery(arrQueries, "DELETE FROM correspondent_devices WHERE device_address=?", [device_address]);
 	async.series(arrQueries, onDone);
+	if (bCordova)
+		updateCorrespondentSettings(device_address, {push_enabled: 0});
+}
+
+function updateCorrespondentSettings(correspondent_address, settings, cb){
+	getHubWs(function(err, ws){
+		if (err)
+			return cb ? cb(err) : null;
+		network.sendJustsaying(ws, 'hub/update_correspondent_settings', Object.assign({correspondent_address: correspondent_address}, settings));
+		if (cb)
+			cb();
+	});
 }
 
 // -------------------------------
@@ -743,7 +763,6 @@ function requestFromHub(command, params, responseHandler){
 	});
 }
 
-
 exports.getMyDevicePubKey = getMyDevicePubKey;
 exports.getMyDeviceAddress = getMyDeviceAddress;
 exports.isValidPubKey = isValidPubKey;
@@ -777,6 +796,7 @@ exports.readCorrespondent = readCorrespondent;
 exports.readCorrespondentsByDeviceAddresses = readCorrespondentsByDeviceAddresses;
 exports.updateCorrespondentProps = updateCorrespondentProps;
 exports.removeCorrespondentDevice = removeCorrespondentDevice;
+exports.updateCorrespondentSettings = updateCorrespondentSettings;
 exports.addIndirectCorrespondents = addIndirectCorrespondents;
 exports.getWitnessesFromHub = getWitnessesFromHub;
 exports.requestFromHub = requestFromHub;

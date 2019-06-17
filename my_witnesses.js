@@ -11,7 +11,7 @@ function readMyWitnesses(handleWitnesses, actionIfEmpty){
 		var arrWitnesses = rows.map(function(row){ return row.address; });
 		// reset witness list if old witnesses found
 		if (constants.alt === '2' && arrWitnesses.indexOf('5K7CSLTRPC5LFLOS3D34GBHG7RFD4TPO') >= 0
-			|| constants.version === '1.0' && arrWitnesses.indexOf('2FF7PSL7FYXVU5UIQHCVDTTPUOOG75GX') >= 0
+			|| constants.versionWithoutTimestamp === '1.0' && arrWitnesses.indexOf('2FF7PSL7FYXVU5UIQHCVDTTPUOOG75GX') >= 0
 		){
 			console.log('deleting old witnesses');
 			db.query("DELETE FROM my_witnesses");
@@ -51,8 +51,8 @@ function replaceWitness(old_witness, new_witness, handleResult){
 		if (conf.bLight) // absent the full database, there is nothing else to check
 			return doReplace();
 		db.query(
-			"SELECT 1 FROM unit_authors CROSS JOIN units USING(unit) WHERE address=? AND sequence='good' AND is_stable=1 LIMIT 1", 
-			[new_witness], 
+			"SELECT 1 FROM unit_authors CROSS JOIN units USING(unit) WHERE address=? AND sequence='good' AND is_stable=1 LIMIT 1",
+			[new_witness],
 			function(rows){
 				if (rows.length === 0)
 					return handleResult("no stable messages from the new witness yet");

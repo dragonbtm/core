@@ -14,10 +14,10 @@ function calcHeadersCommissions(conn, onDone){
 	console.log("will calc h-comm");
 	if (max_spendable_mci === null) // first calc after restart only
 		return initMaxSpendableMci(conn, function(){ calcHeadersCommissions(conn, onDone); });
-	
+
 	// max_spendable_mci is old, it was last updated after previous calc
 	var since_mc_index = max_spendable_mci;
-		
+
 	async.series([
 		function(cb){
 			if (conf.storage === 'mysql'){
@@ -61,8 +61,8 @@ function calcHeadersCommissions(conn, onDone){
 						AND +punits.sequence='good' \n\
 						AND punits.is_stable=1 \n\
 						AND next_mc_units.is_stable=1 \n\
-						AND chunits.unit=( "+best_child_sql+" )", 
-					[since_mc_index, since_mc_index], 
+						AND chunits.unit=( "+best_child_sql+" )",
+					[since_mc_index, since_mc_index],
 					function(){ cb(); }
 				);
 			}
@@ -80,7 +80,7 @@ function calcHeadersCommissions(conn, onDone){
 						AND +punits.sequence='good' \n\
 						AND punits.is_stable=1 \n\
 						AND chunits.main_chain_index-punits.main_chain_index<=1 \n\
-						AND next_mc_units.is_stable=1", 
+						AND next_mc_units.is_stable=1",
 					[since_mc_index],
 					function(rows){
 						// in-memory
@@ -107,7 +107,7 @@ function calcHeadersCommissions(conn, onDone){
 								var children = arrCandidateChildren.map(function(child){
 									return {child_unit: child.unit, next_mc_unit: next_mc_unit};
 								});
-							//	var children = _.map(_.pickBy(storage.assocStableUnits, function(v, k){return (v.main_chain_index - props.main_chain_index == 1 || v.main_chain_index - props.main_chain_index == 0) && v.parent_units.indexOf(props.unit) > -1 && v.sequence === 'good';}), function(props, unit){return {child_unit: unit, next_mc_unit: next_mc_unit}});
+								//	var children = _.map(_.pickBy(storage.assocStableUnits, function(v, k){return (v.main_chain_index - props.main_chain_index == 1 || v.main_chain_index - props.main_chain_index == 0) && v.parent_units.indexOf(props.unit) > -1 && v.sequence === 'good';}), function(props, unit){return {child_unit: unit, next_mc_unit: next_mc_unit}});
 								assocChildrenInfosRAM[parent.unit] = {headers_commission: parent.headers_commission, children: children};
 							}
 						});
@@ -138,7 +138,7 @@ function calcHeadersCommissions(conn, onDone){
 									throwError("different assocChildrenInfos, db: "+JSON.stringify(assocChildrenInfos)+", ram: "+JSON.stringify(assocChildrenInfosRAM));
 							}
 						}
-						
+
 						var assocWonAmounts = {}; // amounts won, indexed by child unit who won the hc, and payer unit
 						for (var payer_unit in assocChildrenInfos){
 							var headers_commission = assocChildrenInfos[payer_unit].headers_commission;
@@ -196,8 +196,8 @@ function calcHeadersCommissions(conn, onDone){
 											if (full_amount<0)
 												throw Error("no amount for child unit "+child_unit+", payer unit "+payer_unit);
 											// note that we round _before_ summing up header commissions won from several parent units
-											var amount = (row.earned_headers_commission_share === 100) 
-												? full_amount 
+											var amount = (row.earned_headers_commission_share === 100)
+												? full_amount
 												: Math.round(full_amount * row.earned_headers_commission_share / 100.0);
 											// hc outputs will be indexed by mci of _payer_ unit
 											arrValues.push("('"+payer_unit+"', '"+row.address+"', "+amount+")");
@@ -283,4 +283,3 @@ function throwError(msg){
 exports.resetMaxSpendableMci = resetMaxSpendableMci;
 exports.calcHeadersCommissions = calcHeadersCommissions;
 exports.getMaxSpendableMciForLastBallMci = getMaxSpendableMciForLastBallMci;
-

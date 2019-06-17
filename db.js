@@ -6,12 +6,12 @@ if (conf.storage === 'mysql'){
 	var mysql = require('mysql');
 	var mysql_pool_constructor = require('./mysql_pool.js');
 	var pool  = mysql.createPool({
-	//var pool  = mysql.createConnection({
+		//var pool  = mysql.createConnection({
 		connectionLimit : conf.database.max_connections,
 		host     : conf.database.host,
 		user     : conf.database.user,
 		password : conf.database.password,
-		charset  : 'UTF8_UNICODE_CI',
+		charset  : 'UTF8MB4_UNICODE_520_CI', // https://github.com/mysqljs/mysql/blob/master/lib/protocol/constants/charsets.js
 		database : conf.database.name
 	});
 

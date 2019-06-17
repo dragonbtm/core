@@ -20,6 +20,8 @@ else{
 	console.log("path="+path);
 }
 
+var bLoading = true;
+
 module.exports = function(db_name, MAX_CONNECTIONS, bReadOnly){
 
 	function openDb(cb){
@@ -43,8 +45,9 @@ module.exports = function(db_name, MAX_CONNECTIONS, bReadOnly){
 			if (err)
 				throw Error(err);
 			console.log("opened db");
-		//	if (!bCordova)
-		//		db.serialize();
+			setTimeout(function(){ bLoading = false; }, 15000);
+			//	if (!bCordova)
+			//		db.serialize();
 			connection.query("PRAGMA foreign_keys = 1", function(){
 				connection.query("PRAGMA busy_timeout=30000", function(){
 					connection.query("PRAGMA journal_mode=WAL", function(){
@@ -59,11 +62,11 @@ module.exports = function(db_name, MAX_CONNECTIONS, bReadOnly){
 				});
 			});
 		});
-		
+
 		var connection = {
 			db: db,
 			bInUse: true,
-			
+
 			release: function(){
 				//console.log("released connection");
 				this.bInUse = false;
@@ -73,7 +76,7 @@ module.exports = function(db_name, MAX_CONNECTIONS, bReadOnly){
 				this.bInUse = true;
 				connectionHandler(this);
 			},
-			
+
 			query: function(){
 				if (!this.bInUse)
 					throw Error("this connection was returned to the pool");
@@ -99,7 +102,7 @@ module.exports = function(db_name, MAX_CONNECTIONS, bReadOnly){
 						self.query.apply(self, new_args);
 					});
 				expandArrayPlaceholders(new_args);
-				
+
 				// add callback with error handling
 				new_args.push(function(err, result){
 					//console.log("query done: "+sql);
@@ -115,25 +118,28 @@ module.exports = function(db_name, MAX_CONNECTIONS, bReadOnly){
 						result = result.rows || [];
 					//console.log("changes="+this.changes+", affected="+result.affectedRows);
 					var consumed_time = Date.now() - start_ts;
+					//	var profiler = require('./profiler.js');
+					//	if (!bLoading)
+					//		profiler.add_result(sql.substr(0, 40).replace(/\n/, '\\n'), consumed_time);
 					if (consumed_time > 25)
 						console.log("long query took "+consumed_time+"ms:\n"+new_args.filter(function(a, i){ return (i<new_args.length-1); }).join(", ")+"\nload avg: "+require('os').loadavg().join(', '));
 					last_arg(result);
 				});
-				
+
 				var start_ts = Date.now();
 				if (bCordova)
 					self.db.query.apply(self.db, new_args);
 				else
 					bSelect ? self.db.all.apply(self.db, new_args) : self.db.run.apply(self.db, new_args);
 			},
-			
+
 			cquery: function(){
 				var conf = require('./conf.js');
 				if (conf.bFaster)
 					return arguments[arguments.length - 1]();
 				this.query.apply(this, arguments);
 			},
-			
+
 			addQuery: addQuery,
 			escape: escape,
 			addTime: addTime,
@@ -144,7 +150,7 @@ module.exports = function(db_name, MAX_CONNECTIONS, bReadOnly){
 			getIgnore: getIgnore,
 			forceIndex: forceIndex,
 			dropTemporaryTable: dropTemporaryTable
-			
+
 		};
 		arrConnections.push(connection);
 	}
@@ -169,7 +175,7 @@ module.exports = function(db_name, MAX_CONNECTIONS, bReadOnly){
 			self.query.apply(self, query_args);
 		});
 	}
-	
+
 	function takeConnectionFromPool(handleConnection){
 
 		if (!bReady){
@@ -180,7 +186,7 @@ module.exports = function(db_name, MAX_CONNECTIONS, bReadOnly){
 			});
 			return;
 		}
-		
+
 		// first, try to find a free connection
 		for (var i=0; i<arrConnections.length; i++)
 			if (!arrConnections[i].bInUse){
@@ -197,14 +203,14 @@ module.exports = function(db_name, MAX_CONNECTIONS, bReadOnly){
 		//console.log("queuing");
 		arrQueue.push(handleConnection);
 	}
-	
+
 	function onDbReady(){
 		if (bCordova && !cordovaSqlite)
 			cordovaSqlite = window.cordova.require('cordova-sqlite-plugin.SQLite');
 		bReady = true;
 		eventEmitter.emit('ready');
 	}
-	
+
 	function getCountUsedConnections(){
 		var count = 0;
 		for (var i=0; i<arrConnections.length; i++)
@@ -242,7 +248,7 @@ module.exports = function(db_name, MAX_CONNECTIONS, bReadOnly){
 			connection.query.apply(connection, new_args);
 		});
 	}
-	
+
 	function close(cb){
 		if (!cb)
 			cb = function(){};
@@ -282,7 +288,7 @@ module.exports = function(db_name, MAX_CONNECTIONS, bReadOnly){
 		return "DROP TABLE IF EXISTS " + table;
 	}
 
-	// note that IGNORE behaves differently from mysql.  In particular, if you insert and forget to specify a NOT NULL colum without DEFAULT value, 
+	// note that IGNORE behaves differently from mysql.  In particular, if you insert and forget to specify a NOT NULL colum without DEFAULT value,
 	// sqlite will ignore while mysql will throw an error
 	function getIgnore(){
 		return "OR IGNORE";
@@ -296,8 +302,8 @@ module.exports = function(db_name, MAX_CONNECTIONS, bReadOnly){
 		else
 			throw Error("escape: unknown type "+(typeof str));
 	}
-	
-	
+
+
 	createDatabaseIfNecessary(db_name, onDbReady);
 
 	var pool = {};
@@ -315,7 +321,7 @@ module.exports = function(db_name, MAX_CONNECTIONS, bReadOnly){
 	pool.getIgnore = getIgnore;
 	pool.forceIndex = forceIndex;
 	pool.dropTemporaryTable = dropTemporaryTable;
-	
+
 	return pool;
 };
 
@@ -358,9 +364,9 @@ function expandArrayPlaceholders(args){
 
 function getParentDirPath(){
 	switch(window.cordova.platformId){
-		case 'ios': 
+		case 'ios':
 			return window.cordova.file.applicationStorageDirectory + '/Library';
-		case 'android': 
+		case 'android':
 		default:
 			return window.cordova.file.applicationStorageDirectory;
 	}
@@ -368,9 +374,9 @@ function getParentDirPath(){
 
 function getDatabaseDirName(){
 	switch(window.cordova.platformId){
-		case 'ios': 
+		case 'ios':
 			return 'LocalDatabase';
-		case 'android': 
+		case 'android':
 		default:
 			return 'databases';
 	}
@@ -382,7 +388,7 @@ function getDatabaseDirPath(){
 
 
 function createDatabaseIfNecessary(db_name, onDbReady){
-	
+
 	console.log('createDatabaseIfNecessary '+db_name);
 	var initial_db_filename = 'initial.' + db_name;
 
@@ -440,7 +446,7 @@ function createDatabaseIfNecessary(db_name, onDbReady){
 				console.log('mkdir '+parent_dir+': '+err);
 				fs.mkdir(path, mode, function(err){
 					console.log('mkdir '+path+': '+err);
-					fs.createReadStream(__dirname + '/' + initial_db_filename).pipe(fs.createWriteStream(path + db_name)).on('finish', onDbReady);
+					fs.createReadStream(__dirname + '/initial-db/' + initial_db_filename).pipe(fs.createWriteStream(path + db_name)).on('finish', onDbReady);
 				});
 			});
 		});

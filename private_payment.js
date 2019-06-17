@@ -31,7 +31,7 @@ function validateAndSavePrivatePaymentChain(arrPrivateElements, callbacks){
 		return callbacks.ifError("no asset in head element");
 	if (!ValidationUtils.isNonnegativeInteger(headElement.message_index))
 		return callbacks.ifError("no message index in head private element");
-	
+
 	var validateAndSave = function(){
 		storage.readAsset(db, asset, null, function(err, objAsset){
 			if (err)
@@ -64,8 +64,8 @@ function validateAndSavePrivatePaymentChain(arrPrivateElements, callbacks){
 						params.push(headElement.output_index);
 					}
 					conn.query(
-						sql, 
-						params, 
+						sql,
+						params,
 						function(rows){
 							if (rows.length > 1)
 								throw Error("more than one output "+sql+' '+params.join(', '));
@@ -81,7 +81,7 @@ function validateAndSavePrivatePaymentChain(arrPrivateElements, callbacks){
 			});
 		});
 	};
-	
+
 	if (conf.bLight)
 		findUnfinishedPastUnitsOfPrivateChains([arrPrivateElements], false, function(arrUnfinishedUnits){
 			(arrUnfinishedUnits.length > 0) ? callbacks.ifWaitingForChain() : validateAndSave();
