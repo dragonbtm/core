@@ -19,7 +19,7 @@ var profiler = require('./profiler.js');
 var inputs = require('./inputs.js');
 
 var hash_placeholder = "--------------------------------------------"; // 256 bits (32 bytes) base64: 44 bytes
-var sig_placeholder = "----------------------------------------------------------------------------------------"; // 88 bytes
+var sig_placeholder = "------------------------------------------------------------------------------------------"; // 90 bytes
 
 
 var bGenesis = false;
