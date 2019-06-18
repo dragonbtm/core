@@ -29,7 +29,7 @@ exports.BLACKBYTES_ASSET = exports.bTestnet ? 'rxgWZHIbLVuG/bzCH2DKw3qrJ6x4Icc2N
 
 exports.HASH_LENGTH = 44;
 exports.PUBKEY_LENGTH = 44;
-exports.SIG_LENGTH = 88;
+exports.SIG_LENGTH = 90;  //88 -> 90
 
 // anti-spam limits
 exports.MAX_AUTHORS_PER_UNIT = 16;
