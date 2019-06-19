@@ -806,7 +806,7 @@ function composeAuthorsForAddresses(conn, arrFromAddresses, last_ball_mci, signe
 			authors.push(objAuthor);
 			conn.query(
 				"SELECT 1 FROM unit_authors CROSS JOIN units USING(unit) \n\
-				WHERE address=? AND is_stable=1 AND sequence='good' AND main_chain_index<=? \n\
+				WHERE address in (?) AND is_stable=1 AND sequence='good' AND main_chain_index<=? \n\
 				LIMIT 1",
 				[from_address, last_ball_mci],
 				function(rows){

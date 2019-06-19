@@ -739,7 +739,7 @@ function validateAuthentifiers(conn, address, this_asset, arrDefinition, objUnit
 				var seen_address = args;
 				conn.query(
 					"SELECT 1 FROM unit_authors CROSS JOIN units USING(unit) \n\
-					WHERE address=? AND main_chain_index<=? AND sequence='good' AND is_stable=1 \n\
+					WHERE address in (?) AND main_chain_index<=? AND sequence='good' AND is_stable=1 \n\
 					LIMIT 1",
 					[seen_address, objValidationState.last_ball_mci],
 					function(rows){
