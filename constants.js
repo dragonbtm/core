@@ -24,7 +24,7 @@ exports.versionWithoutTimestamp = exports.bTestnet ? '1.0t' : '1.0';
 
 //exports.bTestnet = (exports.alt === '2' && exports.version === '1.0t');
 
-exports.GENESIS_UNIT = exports.bTestnet ? '2F/baE75oOPK3EGUtC7pPyOeGYMfF1vl8fKDTOmvqWE=' : 'RtJEPQJ3a84MS5QgA2YHgVwdl5BGHs17/YhGHmDDABo=';
+exports.GENESIS_UNIT = exports.bTestnet ? '2F/baE75oOPK3EGUtC7pPyOeGYMfF1vl8fKDTOmvqWE=' : 'WV+nawmRMJMNlYmByDnKdJOuff+WQaCC4T010uqWVRM=';
 exports.BLACKBYTES_ASSET = exports.bTestnet ? 'rxgWZHIbLVuG/bzCH2DKw3qrJ6x4Icc2N2SzGdtSEt0=' : 'RtJEPQJ3a84MS5QgA2YHgVwdl5BGHs17/YhGHmDDABo=';
 
 exports.HASH_LENGTH = 44;
