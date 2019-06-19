@@ -7,7 +7,7 @@ if (typeof window === 'undefined' || !window.cordova){ // desktop
 	require('dotenv'+'').config({path: appRootDir + '/.env'});
 }
 
-exports.COUNT_WITNESSES = 3;
+exports.COUNT_WITNESSES = 6;
 exports.MAX_WITNESS_LIST_MUTATIONS = 1;
 exports.TOTAL_WHITEBYTES = 99e15;
 exports.MAJORITY_OF_WITNESSES = (exports.COUNT_WITNESSES%2===0) ? (exports.COUNT_WITNESSES/2+1) : Math.ceil(exports.COUNT_WITNESSES/2);
