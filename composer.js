@@ -398,8 +398,8 @@ function composeJoint(params){
 			});
 		},
 		function(cb){ // input coins
-			objUnit.headers_commission = objectLength.getHeadersSize(objUnit);
-			var naked_payload_commission = objectLength.getTotalPayloadSize(objUnit); // without input coins
+			objUnit.headers_commission = conf.bLight ? objectLength.getHeadersSize(objUnit) : 0;
+			var naked_payload_commission = conf.bLight ? objectLength.getTotalPayloadSize(objUnit) : 0; // without input coins
 
 			if (bGenesis){
 				var issueInput = {type: "issue", serial_number: 1, amount: constants.TOTAL_WHITEBYTES};
@@ -416,7 +416,7 @@ function composeJoint(params){
 					throw Error('inputs but no input_amount');
 				total_input = params.input_amount;
 				objPaymentMessage.payload.inputs = params.inputs;
-				objUnit.payload_commission = objectLength.getTotalPayloadSize(objUnit);
+				objUnit.payload_commission = conf.bLight ? objectLength.getTotalPayloadSize(objUnit) : 0;
 				return cb();
 			}
 
@@ -432,7 +432,7 @@ function composeJoint(params){
 						});
 					total_input = _total_input;
 					objPaymentMessage.payload.inputs = arrInputsWithProofs.map(function(objInputWithProof){ return objInputWithProof.input; });
-					objUnit.payload_commission = objectLength.getTotalPayloadSize(objUnit);
+					objUnit.payload_commission = conf.bLight ? objectLength.getTotalPayloadSize(objUnit) : 0;
 					console.log("inputs increased payload by", objUnit.payload_commission - naked_payload_commission);
 					cb();
 				}

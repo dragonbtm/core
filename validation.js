@@ -112,9 +112,9 @@ function validate(objJoint, callbacks) {
 		if (objUnit.messages.length > constants.MAX_MESSAGES_PER_UNIT)
 			return callbacks.ifUnitError("too many messages");
 
-		if (objectLength.getHeadersSize(objUnit) !== objUnit.headers_commission)
+		if (conf.bLight && objectLength.getHeadersSize(objUnit) !== objUnit.headers_commission)
 			return callbacks.ifJointError("wrong headers commission, expected "+objectLength.getHeadersSize(objUnit));
-		if (objectLength.getTotalPayloadSize(objUnit) !== objUnit.payload_commission)
+		if (conf.bLight && objectLength.getTotalPayloadSize(objUnit) !== objUnit.payload_commission)
 			return callbacks.ifJointError("wrong payload commission, unit "+objUnit.unit+", calculated "+objectLength.getTotalPayloadSize(objUnit)+", expected "+objUnit.payload_commission);
 		if (objUnit.headers_commission + objUnit.payload_commission > constants.MAX_UNIT_LENGTH)
 			return callbacks.ifUnitError("unit too large");
@@ -1487,7 +1487,7 @@ function validatePaymentInputsAndOutputs(conn, payload, objAsset, message_index,
 		var output = payload.outputs[i];
 		if (hasFieldsExcept(output, ["address", "amount", "blinding", "output_hash"]))
 			return callback("unknown fields in payment output");
-		if (!isPositiveInteger(output.amount))
+		if (conf.bLight && !isPositiveInteger(output.amount))
 			return callback("amount must be positive integer, found "+output.amount);
 		if (objAsset && objAsset.fixed_denominations && output.amount % denomination !== 0)
 			return callback("output amount must be divisible by denomination");

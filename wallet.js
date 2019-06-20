@@ -1934,8 +1934,8 @@ function sendTextcoinEmail(email, subject, amount, asset, mnemonic){
 	replaceInTextcoinTemplate({amount: amount, asset: asset, mnemonic: mnemonic, usd_amount_str: usd_amount_str}, function(html, text){
 		mail.sendmail({
 			to: email,
-			from: conf.from_email || "noreply@obyte.org",
-			subject: subject || "Obyte user beamed you money",
+			from: conf.from_email || "noreply@byte.org",
+			subject: subject || "byte user beamed you money",
 			body: text,
 			htmlBody: html
 		});
