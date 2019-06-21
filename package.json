@@ -14,7 +14,7 @@
 	"homepage": "https://github.com/dragonbtm/core",
 	"license": "MIT",
 	"repository": {
-		"url": "git://github.com/dragonbtm/core.git",
+		"url": "git://github.com/dragonbtm/core.git#master-nofees",
 		"type": "git"
 	},
 	"bugs": {
