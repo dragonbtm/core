@@ -4,7 +4,7 @@ var eventBus = require('./event_bus.js');
 var constants = require("./constants.js");
 var conf = require("./conf.js");
 
-var VERSION = 21;
+var VERSION = 29;
 
 var async = require('async');
 var bCordova = (typeof window === 'object' && window.cordova);
@@ -167,7 +167,7 @@ function migrateDb(connection, onDone){
 						"+(conf.bLight ? '' : "CONSTRAINT attestationsByAttestorAddress FOREIGN KEY (attestor_address) REFERENCES addresses(address),")+" \n\
 						FOREIGN KEY (unit) REFERENCES units(unit) \n\
 					)");
-					connection.addQuery(arrQueries, 
+					connection.addQuery(arrQueries,
 						"CREATE INDEX IF NOT EXISTS attestedFieldsByAttestorFieldValue ON attested_fields(attestor_address, `field`, `value`)");
 					connection.addQuery(arrQueries, "CREATE INDEX IF NOT EXISTS attestedFieldsByAddressField ON attested_fields(address, `field`)");
 					connection.addQuery(arrQueries, "CREATE TABLE IF NOT EXISTS original_addresses ( \n\
@@ -187,7 +187,7 @@ function migrateDb(connection, onDone){
 								for (var field in attestation.profile){
 									var value = attestation.profile[field];
 									if (field.length <= constants.MAX_PROFILE_FIELD_LENGTH && typeof value === 'string' && value.length <= constants.MAX_PROFILE_VALUE_LENGTH){
-										connection.addQuery(arrQueries, 
+										connection.addQuery(arrQueries,
 											"INSERT "+connection.getIgnore()+" INTO attested_fields \n\
 											(unit, message_index, attestor_address, address, field, value) VALUES(?,?, ?,?, ?,?)",
 											[row.unit, row.message_index, row.attestor_address, row.address, field, value]);
@@ -226,7 +226,7 @@ function migrateDb(connection, onDone){
 }
 
 function rescanAttestations(arrQueries, cb){
-	
+
 }
 
 exports.migrateDb = migrateDb;
